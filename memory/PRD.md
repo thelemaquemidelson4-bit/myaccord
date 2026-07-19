@@ -38,5 +38,10 @@
 - P2: Web image rendering of remote hero fallback (cosmetic on web preview only).
 
 ## Next Tasks
+- LIVE features (build-only, WebRTC): 1:1 audio call, 1:1 video call, live broadcast (1-to-many). Require react-native-webrtc + backend WebSocket signaling + STUN/TURN, and a development build (do NOT work in Expo Go / web preview).
 - Add offer management (edit/delete) and application status workflow.
-- Add athlete video highlights uploader.
+- Message pagination + image size limits.
+
+## Changelog
+- 2026-06-19: Renommage en "Intake" + logo intégré (écrans, icône, splash). Thème bleu & blanc clair translucide.
+- 2026-06-19 (iter 2): Messagerie enrichie — texte temps quasi-réel (polling 2s) + envoi de photos (galerie + caméra, base64), aperçu image plein écran, permissions gérées. Backend 43/43 tests.
