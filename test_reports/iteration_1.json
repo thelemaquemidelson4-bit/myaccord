@@ -1,0 +1,54 @@
+{
+  "summary": "ScoutMoi first iteration testing. Backend: 34/34 pytest tests passed (auth register/login/me/logout, profile update, athlete list+filter+detail, offer CRUD with recruiter-only guard, applications with player-only guard + conversation auto-creation + duplicate blocking, messaging (list/get/send/participant check), AI profile-summary and AI match-suggestions with role guard). Frontend: onboarding->auth->register/login->tabs works for BOTH roles. Recruiter sees TALENTS list + IA sparkles button + FAB create-offer; Publier l'offre form renders; AthleteCard visible. Player sees OFFRES feed with OfferCard + chip filters; offer detail with 'Postuler' button; tabs Accueil/Recherche/Messages/Profil navigate. AI endpoints respond in ~10-15s via Emergent LLM key (Claude Sonnet). One UI bug found: create-offer Description label overlaps multiline TextInput placeholder text. Minor naming: logout is bound to testID 'settings-btn' (functional but misleading). No React Native red screen, no deprecated packages (expo-av / expo-barcode-scanner / expo-background-fetch not present).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "create-offer.tsx (Description field)", "issue": "The 'Description' label overlaps with the multiline TextInput; placeholder text 'Décrivez le profil recherché, les conditions...' is rendered on top of / overlapping the label. Likely a height/positioning issue with the multiline Input (label anchored above input but input area collapsed).", "testID": "n/a", "priority": "MEDIUM"},
+      {"component": "(tabs)/profile.tsx", "issue": "Logout onPress is attached to a Pressable with testID='settings-btn' (line 68) which is misleading — it looks like a settings icon but is actually the logout action. Rename to 'logout-btn' for clarity and testability.", "testID": "settings-btn", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "(tabs)/index.tsx recruiter view", "issues": ["Header text 'Découvrez des talents' wraps to two lines on 390px width due to the IA button taking horizontal space; consider truncation or shorter label."]},
+      {"screen": "create-offer.tsx", "issues": ["Description field label/placeholder overlap (see ui_bugs)."]}
+    ],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Console warning: \"shadow*\" style props are deprecated. Use \"boxShadow\". Present on FAB and card styles. Non-blocking but should be migrated. Reference: /app/frontend/app/(tabs)/index.tsx:161-166 and other card/button style modules."},
+      {"component": "react-native-keyboard-controller", "issue": "Repeated console warning: 'Couldn't find real values for KeyboardContext. Please make sure you're inside of KeyboardProvider'. auth.tsx uses KeyboardAwareScrollView and KeyboardStickyView but no <KeyboardProvider> wraps the app root. Add KeyboardProvider in app/_layout.tsx. Reference: /app/frontend/app/auth.tsx:3."},
+      {"component": "props.pointerEvents", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Migrate any pointerEvents prop to style.pointerEvents (likely in ui components)."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scoutmoi_api.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix create-offer Description field: ensure multiline TextInput height >= 100px and label sits above (not overlapping). Check the Input component's multiline branch styles.",
+    "Rename logout testID from 'settings-btn' to 'logout-btn' in app/(tabs)/profile.tsx line 68 for clarity.",
+    "Wrap the root layout with <KeyboardProvider> from 'react-native-keyboard-controller' in app/_layout.tsx to silence KeyboardContext warnings and enable proper keyboard handling.",
+    "Migrate shadow* style props to boxShadow (or wrap in Platform.select) — visible on FAB and card shadow styles.",
+    "Migrate props.pointerEvents to style.pointerEvents wherever used.",
+    "Optional: shorten recruiter home header caption 'Découvrez des talents' so it fits on one line next to the IA button on 390px width."
+  ],
+  "critical_code_review_comments": [
+    "server.py is a single 634-line file with all routes; still readable but nearing the 700-line threshold — consider splitting into routers (auth, profile, offers, applications, messaging, ai) if features grow.",
+    "get_athlete endpoint doesn't restrict to role=='player' — a recruiter's user_id could be fetched via /athletes/{id}. Not a security issue but semantically the endpoint is named 'athlete'. Consider filtering on role.",
+    "list_athletes returns all fields including email; you may want to strip email for privacy in a public listing.",
+    "AI match-suggestions falls back to top 5 candidates on JSON parse failure — good resilience. But candidates are limited to first 20 with no scoring — acceptable for MVP.",
+    "No rate limiting on AI endpoints — could be abused. Consider per-user cooldown.",
+    "Google session route works but was not tested (no test session token available)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (created)",
+    "/app/backend/tests/test_scoutmoi_api.py (created)"
+  ],
+  "success_rate": {"backend": "100% (34/34)", "frontend": "~90% (all critical flows work; 1 UI overlap bug, 1 testID naming issue, several deprecation warnings)"},
+  "seed_data_creation": "Seed accounts leo@test.com (player) and coach@test.com (recruiter) auto-created by tests if missing (idempotent). Test also created TEST_ prefixed user/offer/application/messages for regression re-use. Passwords: pass1234.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 34 backend tests are ready to re-run: `pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml`. Seed credentials in /app/memory/test_credentials.md. Frontend flows tested with mobile viewport 390x844 using testIDs role-player, role-recruiter, onboarding-continue, toggle-mode, email-input, password-input, submit-btn, ai-suggest-btn, fab-create-offer, edit-profile-btn, ai-summary-btn, settings-btn (logout). Google OAuth flow not testable end-to-end (needs live OAuth session token).",
+  "rca_of_issue": "Create-offer Description overlap: multiline TextInput inside the shared Input component likely doesn't grow vertically (fixed height), so its placeholder renders inside a small box while the label above overlaps due to insufficient marginTop. Fix by conditionally applying minHeight (e.g., 120) when multiline=true and ensuring the label has enough bottom margin. KeyboardContext warning RCA: react-native-keyboard-controller requires <KeyboardProvider> at the root; app/_layout.tsx currently does not wrap children with it, so KeyboardAwareScrollView/KeyboardStickyView fall back to no-op."
+}

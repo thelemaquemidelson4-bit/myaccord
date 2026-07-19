@@ -1,58 +1,622 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
-from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List
+import json
 import uuid
-from datetime import datetime
-
+import bcrypt
+import httpx
+from pathlib import Path
+from pydantic import BaseModel, Field, EmailStr
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
-# Create a router with the /api prefix
+app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# Define Models
-class StatusCheck(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+# ----------------------------- Helpers -----------------------------
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
-# Add your routes to the router instead of directly to app
+
+def new_id(prefix: str) -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:12]}"
+
+
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode('utf-8'), hashed.encode('utf-8'))
+    except Exception:
+        return False
+
+
+async def create_session(user_id: str) -> str:
+    token = uuid.uuid4().hex + uuid.uuid4().hex
+    await db.user_sessions.insert_one({
+        "session_token": token,
+        "user_id": user_id,
+        "created_at": now_utc().isoformat(),
+        "expires_at": (now_utc() + timedelta(days=7)).isoformat(),
+    })
+    return token
+
+
+def public_user(u: Dict[str, Any]) -> Dict[str, Any]:
+    if not u:
+        return u
+    u.pop("_id", None)
+    u.pop("password", None)
+    return u
+
+
+async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Non authentifié")
+    token = authorization.split(" ", 1)[1].strip()
+    session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=401, detail="Session invalide")
+    exp = session.get("expires_at")
+    try:
+        exp_dt = datetime.fromisoformat(exp) if isinstance(exp, str) else exp
+        if exp_dt.tzinfo is None:
+            exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+        if exp_dt < now_utc():
+            raise HTTPException(status_code=401, detail="Session expirée")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+    user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="Utilisateur introuvable")
+    user.pop("password", None)
+    return user
+
+
+# ----------------------------- Models -----------------------------
+class RegisterInput(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    role: str  # "player" | "recruiter"
+
+
+class LoginInput(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class GoogleSessionInput(BaseModel):
+    session_token: str
+    role: Optional[str] = None
+
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    photo: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    # athlete
+    sport: Optional[str] = None
+    position: Optional[str] = None
+    level: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    height: Optional[int] = None
+    weight: Optional[int] = None
+    stats: Optional[Dict[str, Any]] = None
+    videos: Optional[List[str]] = None
+    # recruiter / club
+    club_name: Optional[str] = None
+
+
+class OfferInput(BaseModel):
+    title: str
+    sport: str
+    position: Optional[str] = None
+    level: Optional[str] = None
+    location: Optional[str] = None
+    description: str
+    image: Optional[str] = None
+
+
+class ApplicationInput(BaseModel):
+    offer_id: str
+    message: Optional[str] = None
+
+
+class ConversationInput(BaseModel):
+    target_user_id: str
+
+
+class MessageInput(BaseModel):
+    text: str
+
+
+class AISummaryInput(BaseModel):
+    user_id: Optional[str] = None
+
+
+class AIMatchInput(BaseModel):
+    sport: Optional[str] = None
+    position: Optional[str] = None
+    level: Optional[str] = None
+    offer_id: Optional[str] = None
+
+
+# ----------------------------- Auth Routes -----------------------------
+@api_router.post("/auth/register")
+async def register(inp: RegisterInput):
+    existing = await db.users.find_one({"email": inp.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    if inp.role not in ("player", "recruiter"):
+        raise HTTPException(status_code=400, detail="Rôle invalide")
+    user_id = new_id("user")
+    doc = {
+        "user_id": user_id,
+        "email": inp.email.lower(),
+        "password": hash_password(inp.password),
+        "name": inp.name,
+        "role": inp.role,
+        "photo": None,
+        "bio": None,
+        "location": None,
+        "sport": None,
+        "position": None,
+        "level": None,
+        "age": None,
+        "gender": None,
+        "height": None,
+        "weight": None,
+        "stats": {},
+        "videos": [],
+        "club_name": None,
+        "ai_summary": None,
+        "auth_provider": "email",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.users.insert_one(doc)
+    token = await create_session(user_id)
+    return {"token": token, "user": public_user(doc)}
+
+
+@api_router.post("/auth/login")
+async def login(inp: LoginInput):
+    user = await db.users.find_one({"email": inp.email.lower()})
+    if not user or not user.get("password") or not verify_password(inp.password, user["password"]):
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    token = await create_session(user["user_id"])
+    return {"token": token, "user": public_user(user)}
+
+
+@api_router.post("/auth/google/session")
+async def google_session(inp: GoogleSessionInput):
+    async with httpx.AsyncClient(timeout=20) as hc:
+        resp = await hc.get(
+            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+            headers={"X-Session-ID": inp.session_token},
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Échec de la connexion Google")
+    data = resp.json()
+    email = data.get("email", "").lower()
+    if not email:
+        raise HTTPException(status_code=401, detail="Email Google introuvable")
+    user = await db.users.find_one({"email": email})
+    if not user:
+        user_id = new_id("user")
+        doc = {
+            "user_id": user_id,
+            "email": email,
+            "password": None,
+            "name": data.get("name") or email.split("@")[0],
+            "role": inp.role if inp.role in ("player", "recruiter") else None,
+            "photo": data.get("picture"),
+            "bio": None, "location": None, "sport": None, "position": None,
+            "level": None, "age": None, "gender": None, "height": None,
+            "weight": None, "stats": {}, "videos": [], "club_name": None,
+            "ai_summary": None, "auth_provider": "google",
+            "created_at": now_utc().isoformat(),
+        }
+        await db.users.insert_one(doc)
+        user = doc
+    elif inp.role and not user.get("role"):
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"role": inp.role}})
+        user["role"] = inp.role
+    token = await create_session(user["user_id"])
+    return {"token": token, "user": public_user(user)}
+
+
+@api_router.get("/auth/me")
+async def me(user: Dict[str, Any] = Depends(get_current_user)):
+    return {"user": user}
+
+
+@api_router.post("/auth/logout")
+async def logout(authorization: Optional[str] = Header(None)):
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        await db.user_sessions.delete_one({"session_token": token})
+    return {"ok": True}
+
+
+# ----------------------------- Profile Routes -----------------------------
+@api_router.put("/profile")
+async def update_profile(inp: ProfileUpdate, user: Dict[str, Any] = Depends(get_current_user)):
+    updates = {k: v for k, v in inp.dict().items() if v is not None}
+    if "role" in updates and updates["role"] not in ("player", "recruiter"):
+        updates.pop("role")
+    if updates:
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
+    updated = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "password": 0})
+    return {"user": updated}
+
+
+@api_router.get("/athletes")
+async def list_athletes(
+    sport: Optional[str] = None, position: Optional[str] = None,
+    level: Optional[str] = None, location: Optional[str] = None,
+    gender: Optional[str] = None, q: Optional[str] = None,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    query: Dict[str, Any] = {"role": "player"}
+    if sport:
+        query["sport"] = sport
+    if position:
+        query["position"] = position
+    if level:
+        query["level"] = level
+    if gender:
+        query["gender"] = gender
+    if location:
+        query["location"] = {"$regex": location, "$options": "i"}
+    if q:
+        query["name"] = {"$regex": q, "$options": "i"}
+    athletes = await db.users.find(query, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(200)
+    return {"athletes": athletes}
+
+
+@api_router.get("/athletes/{user_id}")
+async def get_athlete(user_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    a = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password": 0})
+    if not a:
+        raise HTTPException(status_code=404, detail="Profil introuvable")
+    return {"athlete": a}
+
+
+# ----------------------------- Offer Routes -----------------------------
+@api_router.post("/offers")
+async def create_offer(inp: OfferInput, user: Dict[str, Any] = Depends(get_current_user)):
+    if user.get("role") != "recruiter":
+        raise HTTPException(status_code=403, detail="Réservé aux recruteurs")
+    offer_id = new_id("offer")
+    doc = {
+        "offer_id": offer_id,
+        "recruiter_id": user["user_id"],
+        "recruiter_name": user.get("name"),
+        "club_name": user.get("club_name") or user.get("name"),
+        "recruiter_photo": user.get("photo"),
+        "title": inp.title,
+        "sport": inp.sport,
+        "position": inp.position,
+        "level": inp.level,
+        "location": inp.location,
+        "description": inp.description,
+        "image": inp.image,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.offers.insert_one(doc)
+    doc.pop("_id", None)
+    return {"offer": doc}
+
+
+@api_router.get("/offers")
+async def list_offers(
+    sport: Optional[str] = None, level: Optional[str] = None,
+    location: Optional[str] = None, q: Optional[str] = None,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    query: Dict[str, Any] = {}
+    if sport:
+        query["sport"] = sport
+    if level:
+        query["level"] = level
+    if location:
+        query["location"] = {"$regex": location, "$options": "i"}
+    if q:
+        query["title"] = {"$regex": q, "$options": "i"}
+    offers = await db.offers.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"offers": offers}
+
+
+@api_router.get("/offers/mine")
+async def my_offers(user: Dict[str, Any] = Depends(get_current_user)):
+    offers = await db.offers.find({"recruiter_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"offers": offers}
+
+
+@api_router.get("/offers/{offer_id}")
+async def get_offer(offer_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    o = await db.offers.find_one({"offer_id": offer_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(status_code=404, detail="Offre introuvable")
+    return {"offer": o}
+
+
+@api_router.get("/offers/{offer_id}/applications")
+async def offer_applications(offer_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    apps = await db.applications.find({"offer_id": offer_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    for a in apps:
+        athlete = await db.users.find_one({"user_id": a["athlete_id"]}, {"_id": 0, "password": 0})
+        a["athlete"] = athlete
+    return {"applications": apps}
+
+
+# ----------------------------- Applications -----------------------------
+async def get_or_create_conversation(user_a: str, user_b: str) -> Dict[str, Any]:
+    conv = await db.conversations.find_one(
+        {"participants": {"$all": [user_a, user_b]}}, {"_id": 0}
+    )
+    if conv:
+        return conv
+    conv = {
+        "conversation_id": new_id("conv"),
+        "participants": [user_a, user_b],
+        "last_message": None,
+        "last_at": now_utc().isoformat(),
+        "created_at": now_utc().isoformat(),
+    }
+    await db.conversations.insert_one(dict(conv))
+    return conv
+
+
+@api_router.post("/applications")
+async def apply(inp: ApplicationInput, user: Dict[str, Any] = Depends(get_current_user)):
+    if user.get("role") != "player":
+        raise HTTPException(status_code=403, detail="Réservé aux athlètes")
+    offer = await db.offers.find_one({"offer_id": inp.offer_id}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offre introuvable")
+    existing = await db.applications.find_one({"offer_id": inp.offer_id, "athlete_id": user["user_id"]})
+    if existing:
+        raise HTTPException(status_code=400, detail="Vous avez déjà postulé à cette offre")
+    app_id = new_id("app")
+    doc = {
+        "application_id": app_id,
+        "offer_id": inp.offer_id,
+        "offer_title": offer.get("title"),
+        "athlete_id": user["user_id"],
+        "athlete_name": user.get("name"),
+        "recruiter_id": offer.get("recruiter_id"),
+        "message": inp.message,
+        "status": "pending",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.applications.insert_one(doc)
+    # start a conversation with recruiter
+    conv = await get_or_create_conversation(user["user_id"], offer["recruiter_id"])
+    intro = inp.message or f"Bonjour, je suis intéressé(e) par l'offre « {offer.get('title')} »."
+    await post_message_internal(conv["conversation_id"], user["user_id"], intro)
+    doc.pop("_id", None)
+    return {"application": doc, "conversation_id": conv["conversation_id"]}
+
+
+@api_router.get("/applications/mine")
+async def my_applications(user: Dict[str, Any] = Depends(get_current_user)):
+    apps = await db.applications.find({"athlete_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"applications": apps}
+
+
+# ----------------------------- Messaging -----------------------------
+async def post_message_internal(conversation_id: str, sender_id: str, text: str) -> Dict[str, Any]:
+    msg = {
+        "message_id": new_id("msg"),
+        "conversation_id": conversation_id,
+        "sender_id": sender_id,
+        "text": text,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.messages.insert_one(dict(msg))
+    await db.conversations.update_one(
+        {"conversation_id": conversation_id},
+        {"$set": {"last_message": text, "last_at": now_utc().isoformat()}},
+    )
+    return msg
+
+
+@api_router.post("/conversations")
+async def start_conversation(inp: ConversationInput, user: Dict[str, Any] = Depends(get_current_user)):
+    target = await db.users.find_one({"user_id": inp.target_user_id}, {"_id": 0, "password": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    conv = await get_or_create_conversation(user["user_id"], inp.target_user_id)
+    return {"conversation_id": conv["conversation_id"]}
+
+
+@api_router.get("/conversations")
+async def list_conversations(user: Dict[str, Any] = Depends(get_current_user)):
+    convs = await db.conversations.find({"participants": user["user_id"]}, {"_id": 0}).sort("last_at", -1).to_list(200)
+    result = []
+    for c in convs:
+        other_id = next((p for p in c["participants"] if p != user["user_id"]), None)
+        other = await db.users.find_one({"user_id": other_id}, {"_id": 0, "password": 0}) if other_id else None
+        result.append({
+            "conversation_id": c["conversation_id"],
+            "last_message": c.get("last_message"),
+            "last_at": c.get("last_at"),
+            "other": {
+                "user_id": other.get("user_id"),
+                "name": other.get("name"),
+                "photo": other.get("photo"),
+                "role": other.get("role"),
+                "club_name": other.get("club_name"),
+            } if other else None,
+        })
+    return {"conversations": result}
+
+
+@api_router.get("/conversations/{conversation_id}/messages")
+async def get_messages(conversation_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    conv = await db.conversations.find_one({"conversation_id": conversation_id}, {"_id": 0})
+    if not conv or user["user_id"] not in conv["participants"]:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    msgs = await db.messages.find({"conversation_id": conversation_id}, {"_id": 0}).sort("created_at", 1).to_list(1000)
+    other_id = next((p for p in conv["participants"] if p != user["user_id"]), None)
+    other = await db.users.find_one({"user_id": other_id}, {"_id": 0, "password": 0}) if other_id else None
+    return {"messages": msgs, "other": public_user(other) if other else None}
+
+
+@api_router.post("/conversations/{conversation_id}/messages")
+async def send_message_route(conversation_id: str, inp: MessageInput, user: Dict[str, Any] = Depends(get_current_user)):
+    conv = await db.conversations.find_one({"conversation_id": conversation_id}, {"_id": 0})
+    if not conv or user["user_id"] not in conv["participants"]:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    msg = await post_message_internal(conversation_id, user["user_id"], inp.text)
+    msg.pop("_id", None)
+    return {"message": msg}
+
+
+# ----------------------------- AI Routes -----------------------------
+async def run_llm(system_message: str, prompt: str) -> str:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=new_id("ai"),
+        system_message=system_message,
+    ).with_model("anthropic", "claude-sonnet-4-6")
+    resp = await chat.send_message(UserMessage(text=prompt))
+    return resp if isinstance(resp, str) else str(resp)
+
+
+@api_router.post("/ai/profile-summary")
+async def ai_profile_summary(inp: AISummaryInput, user: Dict[str, Any] = Depends(get_current_user)):
+    target_id = inp.user_id or user["user_id"]
+    athlete = await db.users.find_one({"user_id": target_id}, {"_id": 0, "password": 0})
+    if not athlete:
+        raise HTTPException(status_code=404, detail="Profil introuvable")
+    data = {
+        "nom": athlete.get("name"),
+        "sport": athlete.get("sport"),
+        "poste": athlete.get("position"),
+        "niveau": athlete.get("level"),
+        "age": athlete.get("age"),
+        "taille_cm": athlete.get("height"),
+        "poids_kg": athlete.get("weight"),
+        "localisation": athlete.get("location"),
+        "stats": athlete.get("stats"),
+        "bio": athlete.get("bio"),
+    }
+    prompt = (
+        "Rédige un résumé professionnel et percutant (3-4 phrases, en français) mettant en valeur "
+        "ce profil d'athlète pour des recruteurs sportifs. Sois concret, dynamique et positif. "
+        "Ne mets pas de titre, uniquement le paragraphe.\n\nDonnées du joueur:\n"
+        + json.dumps(data, ensure_ascii=False, indent=2)
+    )
+    try:
+        summary = await run_llm("Tu es un scout sportif expert qui rédige des présentations de joueurs.", prompt)
+    except Exception as e:
+        logger.error(f"AI summary error: {e}")
+        raise HTTPException(status_code=500, detail="Échec de la génération IA")
+    summary = summary.strip()
+    if inp.user_id is None or inp.user_id == user["user_id"]:
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"ai_summary": summary}})
+    return {"summary": summary}
+
+
+@api_router.post("/ai/match-suggestions")
+async def ai_match_suggestions(inp: AIMatchInput, user: Dict[str, Any] = Depends(get_current_user)):
+    if user.get("role") != "recruiter":
+        raise HTTPException(status_code=403, detail="Réservé aux recruteurs")
+    sport = inp.sport
+    position = inp.position
+    level = inp.level
+    if inp.offer_id:
+        offer = await db.offers.find_one({"offer_id": inp.offer_id}, {"_id": 0})
+        if offer:
+            sport = sport or offer.get("sport")
+            position = position or offer.get("position")
+            level = level or offer.get("level")
+    query: Dict[str, Any] = {"role": "player"}
+    if sport:
+        query["sport"] = sport
+    candidates = await db.users.find(query, {"_id": 0, "password": 0}).to_list(20)
+    if not candidates:
+        return {"suggestions": []}
+    compact = [{
+        "user_id": c["user_id"], "nom": c.get("name"), "sport": c.get("sport"),
+        "poste": c.get("position"), "niveau": c.get("level"), "age": c.get("age"),
+        "localisation": c.get("location"), "stats": c.get("stats"),
+    } for c in candidates]
+    prompt = (
+        f"Besoin du recruteur: sport={sport}, poste={position}, niveau={level}.\n"
+        "Voici une liste de joueurs candidats (JSON). Sélectionne les 5 meilleurs correspondants. "
+        "Réponds UNIQUEMENT avec un tableau JSON valide d'objets de la forme "
+        '{"user_id": "...", "reason": "raison courte en français"}. '
+        "Aucun texte hors du JSON.\n\nCandidats:\n"
+        + json.dumps(compact, ensure_ascii=False)
+    )
+    try:
+        raw = await run_llm("Tu es un scout sportif qui évalue et classe des joueurs.", prompt)
+    except Exception as e:
+        logger.error(f"AI match error: {e}")
+        raise HTTPException(status_code=500, detail="Échec de la suggestion IA")
+    ranked = []
+    try:
+        txt = raw.strip()
+        start = txt.find("[")
+        end = txt.rfind("]")
+        if start != -1 and end != -1:
+            txt = txt[start:end + 1]
+        parsed = json.loads(txt)
+        by_id = {c["user_id"]: c for c in candidates}
+        for item in parsed:
+            cid = item.get("user_id")
+            if cid in by_id:
+                athlete = by_id[cid]
+                athlete["ai_reason"] = item.get("reason")
+                ranked.append(athlete)
+    except Exception as e:
+        logger.error(f"AI parse error: {e}")
+        ranked = candidates[:5]
+    return {"suggestions": ranked}
+
+
+# ----------------------------- Startup -----------------------------
+@app.on_event("startup")
+async def startup():
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("user_id", unique=True)
+    await db.user_sessions.create_index("session_token", unique=True)
+    await db.user_sessions.create_index("user_id")
+
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "ScoutMoi API"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
-
-# Include the router in the main app
 app.include_router(api_router)
 
 app.add_middleware(
@@ -63,12 +627,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

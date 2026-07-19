@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.athletejobs.mxkx1l"
+      "bundleIdentifier": "com.emergent.athletejobs.mxkx1l",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Ajoutez une photo à votre profil sportif"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,6 +30,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ajoutez une photo à votre profil sportif"
+        }
+      ],
       [
         "expo-splash-screen",
         {
