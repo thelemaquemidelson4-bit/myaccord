@@ -4,6 +4,7 @@ import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboa
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { AppText, Button, Input } from "@/src/components/ui";
 import { useAuth } from "@/src/context/AuthContext";
 import { colors, spacing, radius, fonts, font } from "@/src/theme/theme";
@@ -69,6 +70,12 @@ export default function Auth() {
         <Pressable testID="back-btn" onPress={() => router.back()} style={styles.back}>
           <Ionicons name="chevron-back" size={24} color={colors.onSurface} />
         </Pressable>
+
+        <Image
+          source={require("../assets/images/intake-logo.png")}
+          style={styles.logo}
+          contentFit="contain"
+        />
 
         <AppText variant="display" style={{ fontSize: 34, marginTop: spacing.lg }}>
           {mode === "register" ? "Créer un compte" : "Bon retour"}
@@ -165,6 +172,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     alignItems: "center", justifyContent: "center",
   },
+  logo: { width: 72, height: 72, borderRadius: radius.md, marginTop: spacing.lg },
   divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.lg },
   line: { flex: 1, height: 1, backgroundColor: colors.divider },
   footer: {

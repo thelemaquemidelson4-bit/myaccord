@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, StyleSheet, ScrollView, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,7 +9,7 @@ import { AppText, Button, Badge } from "@/src/components/ui";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api/client";
 import { FALLBACK_HERO } from "@/src/constants/data";
-import { colors, spacing, radius, fonts, font } from "@/src/theme/theme";
+import { colors, spacing, radius, font } from "@/src/theme/theme";
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
@@ -107,7 +107,7 @@ export default function Profile() {
                 </AppText>
               ) : (
                 <AppText variant="caption" style={{ marginTop: spacing.sm }}>
-                  Générez une présentation professionnelle de votre profil grâce à l'IA.
+                  Générez une présentation professionnelle de votre profil grâce à l&apos;IA.
                 </AppText>
               )}
               <Button
@@ -132,7 +132,7 @@ export default function Profile() {
             <>
               <SectionTitle title={`Mes offres (${offers.length})`} />
               {offers.length === 0 ? (
-                <AppText variant="caption">Aucune offre publiée. Utilisez le bouton + sur l'accueil.</AppText>
+                <AppText variant="caption">Aucune offre publiée. Utilisez le bouton + sur l&apos;accueil.</AppText>
               ) : (
                 offers.map((o) => (
                   <Pressable key={o.offer_id} testID={`my-offer-${o.offer_id}`} onPress={() => router.push(`/offer/${o.offer_id}`)} style={styles.listItem}>
@@ -149,7 +149,7 @@ export default function Profile() {
             <>
               <SectionTitle title={`Mes candidatures (${apps.length})`} />
               {apps.length === 0 ? (
-                <AppText variant="caption">Aucune candidature pour l'instant.</AppText>
+                <AppText variant="caption">Aucune candidature pour le moment.</AppText>
               ) : (
                 apps.map((a) => (
                   <View key={a.application_id} style={styles.listItem}>

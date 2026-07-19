@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
@@ -64,7 +64,7 @@ export default function OfferDetail() {
         <Pressable testID="offer-back" onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
         </Pressable>
-        <AppText variant="label">Détail de l'offre</AppText>
+        <AppText variant="label">Détail de l&apos;offre</AppText>
         <View style={{ width: 40 }} />
       </View>
 
@@ -99,7 +99,7 @@ export default function OfferDetail() {
           <>
             <AppText variant="displaySm" style={{ marginTop: spacing.xl, marginBottom: spacing.md }}>Candidatures ({applications.length})</AppText>
             {applications.length === 0 ? (
-              <AppText variant="caption">Aucune candidature pour l'instant.</AppText>
+              <AppText variant="caption">Aucune candidature pour le moment.</AppText>
             ) : (
               applications.map((a) => (
                 <Pressable key={a.application_id} testID={`app-${a.application_id}`} onPress={() => router.push(`/athlete/${a.athlete_id}`)} style={styles.appRow}>

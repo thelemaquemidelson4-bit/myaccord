@@ -27,10 +27,12 @@ export default function Onboarding() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <AppText variant="display" style={styles.logo}>
-            IN<AppText variant="display" color={colors.brandPrimary} style={styles.logo}>TAKE</AppText>
-          </AppText>
-          <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xs }}>
+          <Image
+            source={require("../assets/images/intake-logo.png")}
+            style={styles.logoImg}
+            contentFit="contain"
+          />
+          <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.sm }}>
             La plateforme de recrutement sportif
           </AppText>
         </View>
@@ -94,8 +96,9 @@ function RoleCard({ title, subtitle, image, selected, onPress, height, testID }:
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  header: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl },
+  header: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl, alignItems: "flex-start" },
   logo: { fontSize: 40, letterSpacing: 1 },
+  logoImg: { width: 96, height: 96, borderRadius: radius.lg },
   card: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
