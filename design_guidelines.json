@@ -1,0 +1,171 @@
+{
+  "app_name": "ScoutMoi",
+  "personality": "7 Dark-First Utility DARK",
+  "personality_one_liner": "An intense, high-contrast, performance-oriented aesthetic that feels like a live operational surface for sports scouting.",
+  "color": {
+    "surface": "#0F1115",
+    "onSurface": "#FFFFFF",
+    "surfaceSecondary": "#1A1D24",
+    "onSurfaceSecondary": "#E2E4E9",
+    "surfaceTertiary": "#252932",
+    "onSurfaceTertiary": "#A0A6B1",
+    "surfaceInverse": "#FFFFFF",
+    "onSurfaceInverse": "#0F1115",
+    "brand": "#FF453A",
+    "brandPrimary": "#FF453A",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#FF6961",
+    "onBrandSecondary": "#3A0000",
+    "brandTertiary": "#3D1D1C",
+    "onBrandTertiary": "#FF8A84",
+    "success": "#32D74B",
+    "onSuccess": "#003811",
+    "warning": "#FFD60A",
+    "onWarning": "#4D3C00",
+    "error": "#FF453A",
+    "onError": "#FFFFFF",
+    "info": "#8E8E93",
+    "onInfo": "#000000",
+    "border": "#2A2E37",
+    "borderStrong": "#3D434F",
+    "divider": "#1F232B"
+  },
+  "typography": {
+    "displayFontFamily": "Barlow Condensed",
+    "textFontFamily": "Manrope",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Handle spacing correctly dont have extra spaces where its not required, handle padding and margin corectly and subtle for buttons and components. Use sm/md spacing rhythm for a tight, dashboard-like feel.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": "false",
+    "do's": [
+      "Use solid surfaceSecondary with exact elevation instead of glass, per Dark-First Utility."
+    ],
+    "dont's": [
+      "No blur/glass effects. The UI must remain sharp and highly readable like a dashboard."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "solid surfaceSecondary",
+      "android": "solid surfaceSecondary",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Onboarding",
+      "purpose": "Dual-role selection screen to split the flow between Athletes and Recruiters.",
+      "states": {
+        "loading": "Centered spinner using brandPrimary color.",
+        "empty": "N/A",
+        "error": "Readable text in the center with a Retry button."
+      },
+      "layout": "Two massive full-bleed image cards stacked vertically or presented sequentially. Each features a heavy vertical gradient scrim (transparent to 80% surfaceInverse) with a primary CTA pinned to the bottom. 'Je suis Athlète' vs 'Je suis Recruteur'."
+    },
+    {
+      "name": "HomeFeed",
+      "purpose": "Recruiters see a vertical scrolling feed of athlete profile highlights; Athletes see recruitment offers from clubs.",
+      "states": {
+        "loading": "Skeleton of athlete cards or job offers.",
+        "empty": "Illustration of a whistle/clipboard + 'Aucun profil trouvé pour l'instant' + 'Modifier les filtres' CTA.",
+        "error": "Error message in French + 'Réessayer'."
+      },
+      "layout": "High-impact, edge-to-edge profile cards. Each card uses an athlete photo with a heavy gradient-to-dark scrim. Athlete name and key stats (Speed, Position, Level) are overlaid using Barlow Condensed. For athletes, the feed shows club offers using surfaceSecondary cards."
+    },
+    {
+      "name": "SearchFilters",
+      "purpose": "Granular search to filter athletes by sport, position, age, and skill level.",
+      "states": {
+        "loading": "Spinner centered.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Strict single-column layout. Labels above inputs. Segmented controls for gender and skill level. A sticky 'Appliquer les filtres' CTA at the bottom above the home indicator, inside a surface container to block scrolling content."
+    },
+    {
+      "name": "Profile",
+      "purpose": "Detailed view of the athlete's stats, bio, and video highlights.",
+      "states": {
+        "loading": "Profile skeleton.",
+        "empty": "Icon + 'Profil non complet' + 'Compléter le profil' CTA.",
+        "error": "Error message + 'Réessayer'."
+      },
+      "layout": "Hero image at the top with subtle parallax. Deep black (surface) background below. Stats displayed in dense, condensed metrics blocks (using surfaceTertiary as chips). A pinned 'Contacter' CTA at the bottom."
+    },
+    {
+      "name": "Messages",
+      "purpose": "Direct communication between players and recruiters.",
+      "states": {
+        "loading": "Message thread skeletons.",
+        "empty": "Message icon + 'Pas de messages' + 'Parcourir les profils'.",
+        "error": "Error message + 'Réessayer'."
+      },
+      "layout": "Standard chat interface. Messages from the user in surfaceTertiary, from the other party in brandTertiary. Input field at the bottom attached to the keyboard."
+    }
+  ],
+  "images": {
+    "onboarding_athlete_bg": {
+      "url": "https://images.pexels.com/photos/35005203/pexels-photo-35005203.jpeg",
+      "alt": "Men running on an outdoor track under stadium lights at night"
+    },
+    "onboarding_recruiter_bg": {
+      "url": "https://images.pexels.com/photos/32101180/pexels-photo-32101180.jpeg",
+      "alt": "Two soccer coaches reviewing strategies on the field"
+    },
+    "hero_player_1": {
+      "url": "https://images.pexels.com/photos/918798/pexels-photo-918798.jpeg",
+      "alt": "Action shot of a soccer player kicking the ball during a night game"
+    },
+    "hero_player_2": {
+      "url": "https://images.pexels.com/photos/30050101/pexels-photo-30050101.jpeg",
+      "alt": "Silhouette of an athlete performing a jump shot indoors"
+    },
+    "club_jersey_1": {
+      "url": "https://images.pexels.com/photos/10095952/pexels-photo-10095952.jpeg",
+      "alt": "Close-up view of a blue Real Madrid soccer jersey"
+    },
+    "stadium_bg": {
+      "url": "https://images.pexels.com/photos/30689703/pexels-photo-30689703.jpeg",
+      "alt": "Rows of red and blue stadium seats"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the Dark-First Utility DARK guidelines. Do not use glass/blur effects; stick to solid `surfaceSecondary` for elevated cards and headers.",
+    "Ensure the UI is entirely in French as requested. For example, use 'Recruteurs', 'Athlètes', 'Rechercher', 'Messages'.",
+    "For the club logos (like PSG or Real Madrid), since PNG logos with transparency were not found via the image tool, implement the initials fallback explicitly: a `surfaceTertiary` circle with 2-3 letter initials (e.g., 'RMA' or 'PSG') in `onSurfaceTertiary`, weight 500. Do not use random placeholder URLs.",
+    "Implement the gradient scrim on every image that has text overlaid (especially in Onboarding and HomeFeed). The scrim must be a 3-stop vertical gradient from transparent -> ~20% surfaceInverse -> ≥70% surfaceInverse at the bottom.",
+    "Keep forms strictly single-column with labels above inputs. No floating labels. Ensure the primary CTA is always sticky at the bottom over scrolling content.",
+    "Use `Barlow Condensed` exclusively for headings, scores, metrics, and tight UI labels to enforce the sporty, athletic feel. Use `Manrope` for all readable body text.",
+    "No blue or purple anywhere in the app. The primary brand is Signal Red (`#FF453A`). If any status needs color, use the provided success/warning/info tokens. Info is intentionally metallic gray (`#8E8E93`)."
+  ]
+}
