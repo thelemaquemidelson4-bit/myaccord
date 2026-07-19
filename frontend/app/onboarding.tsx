@@ -28,7 +28,7 @@ export default function Onboarding() {
       >
         <View style={styles.header}>
           <AppText variant="display" style={styles.logo}>
-            SCOUT<AppText variant="display" color={colors.brandPrimary} style={styles.logo}>MOI</AppText>
+            IN<AppText variant="display" color={colors.brandPrimary} style={styles.logo}>TAKE</AppText>
           </AppText>
           <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xs }}>
             La plateforme de recrutement sportif
