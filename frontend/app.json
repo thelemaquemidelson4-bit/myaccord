@@ -4,7 +4,7 @@
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/intake-icon.png",
+    "icon": "./assets/images/myaccord-icon.png",
     "scheme": "frontend",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -18,7 +18,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/intake-icon.png",
+        "foregroundImage": "./assets/images/myaccord-icon.png",
         "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
@@ -41,7 +41,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/intake-icon.png",
+          "image": "./assets/images/myaccord-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
