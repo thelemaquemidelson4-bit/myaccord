@@ -151,15 +151,22 @@ export default function Profile() {
               {apps.length === 0 ? (
                 <AppText variant="caption">Aucune candidature pour le moment.</AppText>
               ) : (
-                apps.map((a) => (
-                  <View key={a.application_id} style={styles.listItem}>
-                    <View style={{ flex: 1 }}>
-                      <AppText variant="label" numberOfLines={1}>{a.offer_title}</AppText>
-                      <AppText variant="caption" style={{ marginTop: 2 }}>Statut : en attente</AppText>
+                apps.map((a) => {
+                  const meta = a.status === "accepted"
+                    ? { label: "Acceptée", color: "#D6F5E3", text: "#0B7A43" }
+                    : a.status === "rejected"
+                    ? { label: "Refusée", color: "#FADCDC", text: "#B02B2B" }
+                    : { label: "En attente", color: colors.surfaceTertiary, text: colors.onSurfaceSecondary };
+                  return (
+                    <View key={a.application_id} style={styles.listItem}>
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="label" numberOfLines={1}>{a.offer_title}</AppText>
+                        <AppText variant="caption" style={{ marginTop: 2 }}>Statut de la candidature</AppText>
+                      </View>
+                      <Badge text={meta.label} color={meta.color} textColor={meta.text} />
                     </View>
-                    <Badge text="Envoyée" color={colors.surfaceTertiary} textColor={colors.onSurfaceSecondary} />
-                  </View>
-                ))
+                  );
+                })
               )}
             </>
           )}

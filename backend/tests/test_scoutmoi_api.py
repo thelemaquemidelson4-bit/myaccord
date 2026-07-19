@@ -646,3 +646,227 @@ def test_logout_invalidates_session(base_url, session):
     assert r_out.status_code == 200
     r_after = session.get(f"{base_url}/api/auth/me", headers=_hdr(tok))
     assert r_after.status_code == 401
+
+# ---------- Iteration 4: Offer edit/delete + Application status workflow ----------
+def test_iter4_update_offer_owner_partial(base_url, session):
+    """PUT /api/offers/{id} by owner - partial update only touches provided fields."""
+    payload = {"title": "TEST Attaquant recherché (updated)", "location": "Marseille"}
+    r = session.put(
+        f"{base_url}/api/offers/{state['offer_id']}", json=payload,
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 200, r.text
+    offer = r.json()["offer"]
+    assert offer["title"] == "TEST Attaquant recherché (updated)"
+    assert offer["location"] == "Marseille"
+    # untouched fields preserved
+    assert offer["sport"] == "Football"
+    assert offer["position"] == "Attaquant"
+    # verify via GET
+    g = session.get(f"{base_url}/api/offers/{state['offer_id']}", headers=_hdr(state["player_token"]))
+    assert g.status_code == 200
+    assert g.json()["offer"]["title"] == "TEST Attaquant recherché (updated)"
+    assert g.json()["offer"]["location"] == "Marseille"
+
+
+def test_iter4_update_offer_non_owner_recruiter_403(base_url, session):
+    """PUT by another recruiter -> 403."""
+    email = f"TEST_recr2_{uuid.uuid4().hex[:6]}@t.com"
+    reg = session.post(f"{base_url}/api/auth/register", json={
+        "email": email, "password": "pass1234", "name": "Other Coach", "role": "recruiter"
+    })
+    assert reg.status_code == 200
+    tok2 = reg.json()["token"]
+    state["recruiter2_token"] = tok2
+    state["recruiter2_id"] = reg.json()["user"]["user_id"]
+    r = session.put(
+        f"{base_url}/api/offers/{state['offer_id']}", json={"title": "hijack"},
+        headers=_hdr(tok2),
+    )
+    assert r.status_code == 403
+
+
+def test_iter4_update_offer_by_player_403(base_url, session):
+    r = session.put(
+        f"{base_url}/api/offers/{state['offer_id']}", json={"title": "hijack"},
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 403
+
+
+def test_iter4_update_offer_unknown_404(base_url, session):
+    r = session.put(
+        f"{base_url}/api/offers/offer_doesnotexist", json={"title": "x"},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 404
+
+
+# ---- Application status workflow (use existing application before delete) ----
+def _fetch_application_id(base_url, session):
+    r = session.get(f"{base_url}/api/applications/mine", headers=_hdr(state["player_token"]))
+    assert r.status_code == 200
+    apps = r.json()["applications"]
+    app = next((a for a in apps if a["offer_id"] == state["offer_id"]), None)
+    assert app is not None, "expected application from earlier test"
+    return app["application_id"]
+
+
+def test_iter4_update_application_status_accepted_posts_notification(base_url, session):
+    app_id = _fetch_application_id(base_url, session)
+    state["application_id"] = app_id
+    r = session.put(
+        f"{base_url}/api/applications/{app_id}/status",
+        json={"status": "accepted"},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["application"]["status"] == "accepted"
+    # Notification must appear in athlete<->recruiter conversation
+    m = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages?limit=50",
+        headers=_hdr(state["player_token"]),
+    )
+    assert m.status_code == 200
+    msgs = m.json()["messages"]
+    assert any(
+        (msg.get("text") or "").startswith("✅") and "acceptée" in (msg.get("text") or "")
+        for msg in msgs
+    ), "expected an accepted-notification message from recruiter"
+    # athlete sees updated status via /applications/mine
+    mine = session.get(f"{base_url}/api/applications/mine", headers=_hdr(state["player_token"]))
+    assert mine.status_code == 200
+    my_app = next(a for a in mine.json()["applications"] if a["application_id"] == app_id)
+    assert my_app["status"] == "accepted"
+
+
+def test_iter4_update_application_status_rejected_posts_notification(base_url, session):
+    app_id = state["application_id"]
+    r = session.put(
+        f"{base_url}/api/applications/{app_id}/status",
+        json={"status": "rejected"},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 200
+    assert r.json()["application"]["status"] == "rejected"
+    m = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages?limit=50",
+        headers=_hdr(state["player_token"]),
+    )
+    assert m.status_code == 200
+    msgs = m.json()["messages"]
+    assert any(
+        (msg.get("text") or "").startswith("❌") and "retenue" in (msg.get("text") or "")
+        for msg in msgs
+    ), "expected a rejected-notification message"
+
+
+def test_iter4_update_application_status_pending_no_notification(base_url, session):
+    app_id = state["application_id"]
+    # Snapshot current msg count
+    before = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages?limit=100",
+        headers=_hdr(state["player_token"]),
+    )
+    before_texts = [m.get("text") for m in before.json()["messages"]]
+    r = session.put(
+        f"{base_url}/api/applications/{app_id}/status",
+        json={"status": "pending"},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 200
+    assert r.json()["application"]["status"] == "pending"
+    after = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages?limit=100",
+        headers=_hdr(state["player_token"]),
+    )
+    after_texts = [m.get("text") for m in after.json()["messages"]]
+    # No new ✅/❌ notification should be appended for 'pending'
+    new_texts = after_texts[len(before_texts):]
+    assert not any((t or "").startswith(("✅", "❌")) for t in new_texts)
+
+
+def test_iter4_update_application_status_invalid_400(base_url, session):
+    r = session.put(
+        f"{base_url}/api/applications/{state['application_id']}/status",
+        json={"status": "maybe"},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 400
+
+
+def test_iter4_update_application_status_non_owner_recruiter_403(base_url, session):
+    r = session.put(
+        f"{base_url}/api/applications/{state['application_id']}/status",
+        json={"status": "accepted"},
+        headers=_hdr(state["recruiter2_token"]),
+    )
+    assert r.status_code == 403
+
+
+def test_iter4_update_application_status_by_athlete_403(base_url, session):
+    r = session.put(
+        f"{base_url}/api/applications/{state['application_id']}/status",
+        json={"status": "accepted"},
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 403
+
+
+def test_iter4_update_application_status_unknown_404(base_url, session):
+    r = session.put(
+        f"{base_url}/api/applications/app_doesnotexist/status",
+        json={"status": "accepted"},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 404
+
+
+# ---- Delete offer (do last: cascades applications) ----
+def test_iter4_delete_offer_non_owner_403(base_url, session):
+    r = session.delete(
+        f"{base_url}/api/offers/{state['offer_id']}",
+        headers=_hdr(state["recruiter2_token"]),
+    )
+    assert r.status_code == 403
+
+
+def test_iter4_delete_offer_by_player_403(base_url, session):
+    r = session.delete(
+        f"{base_url}/api/offers/{state['offer_id']}",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 403
+
+
+def test_iter4_delete_offer_unknown_404(base_url, session):
+    r = session.delete(
+        f"{base_url}/api/offers/offer_doesnotexist",
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 404
+
+
+def test_iter4_delete_offer_owner_cascades_applications(base_url, session):
+    app_id = state["application_id"]
+    r = session.delete(
+        f"{base_url}/api/offers/{state['offer_id']}",
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"ok": True}
+    # Subsequent GET -> 404
+    g = session.get(f"{base_url}/api/offers/{state['offer_id']}", headers=_hdr(state["player_token"]))
+    assert g.status_code == 404
+    # Applications for that offer are gone -> updating status now 404
+    s = session.put(
+        f"{base_url}/api/applications/{app_id}/status",
+        json={"status": "accepted"},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert s.status_code == 404
+    # /applications/mine no longer contains this offer
+    mine = session.get(f"{base_url}/api/applications/mine", headers=_hdr(state["player_token"]))
+    assert mine.status_code == 200
+    assert not any(a["application_id"] == app_id for a in mine.json()["applications"])
+

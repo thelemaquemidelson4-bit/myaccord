@@ -39,6 +39,7 @@ export const api = {
   post: <T = any>(path: string, body?: any, auth = true) =>
     request<T>(path, { method: "POST", body, auth }),
   put: <T = any>(path: string, body?: any) => request<T>(path, { method: "PUT", body }),
+  del: <T = any>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
 export type User = {

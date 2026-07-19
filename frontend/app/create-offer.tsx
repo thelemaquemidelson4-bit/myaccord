@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Pressable } from "react-native";
 import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, Button, Input } from "@/src/components/ui";
 import { SelectField } from "@/src/components/form";
@@ -13,6 +13,8 @@ import { colors, spacing } from "@/src/theme/theme";
 export default function CreateOffer() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEdit = !!id;
 
   const [title, setTitle] = useState("");
   const [sport, setSport] = useState<string | null>(null);
@@ -23,6 +25,22 @@ export default function CreateOffer() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      try {
+        const data = await api.get(`/offers/${id}`);
+        const o = data.offer;
+        setTitle(o.title || "");
+        setSport(o.sport || null);
+        setPosition(o.position || null);
+        setLevel(o.level || null);
+        setLocation(o.location || "");
+        setDescription(o.description || "");
+      } catch {}
+    })();
+  }, [id]);
+
   const save = async () => {
     setError(null);
     if (!title || !sport || !description) {
@@ -31,7 +49,11 @@ export default function CreateOffer() {
     }
     setSaving(true);
     try {
-      await api.post("/offers", { title, sport, position, level, location, description });
+      if (isEdit) {
+        await api.put(`/offers/${id}`, { title, sport, position, level, location, description });
+      } else {
+        await api.post("/offers", { title, sport, position, level, location, description });
+      }
       router.back();
     } catch (e: any) {
       setError(e.message);
@@ -48,7 +70,7 @@ export default function CreateOffer() {
         <Pressable testID="offer-create-back" onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="close" size={22} color={colors.onSurface} />
         </Pressable>
-        <AppText variant="label">Nouvelle offre</AppText>
+        <AppText variant="label">{isEdit ? "Modifier l'offre" : "Nouvelle offre"}</AppText>
         <View style={{ width: 40 }} />
       </View>
 
@@ -75,7 +97,7 @@ export default function CreateOffer() {
 
       <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
         <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-          <Button title="Publier l'offre" full loading={saving} onPress={save} testID="offer-publish" />
+          <Button title={isEdit ? "Enregistrer" : "Publier l'offre"} full loading={saving} onPress={save} testID="offer-publish" />
         </View>
       </KeyboardStickyView>
     </View>

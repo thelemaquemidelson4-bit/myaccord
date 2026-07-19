@@ -165,6 +165,20 @@ class ApplicationInput(BaseModel):
     message: Optional[str] = None
 
 
+class OfferUpdate(BaseModel):
+    title: Optional[str] = None
+    sport: Optional[str] = None
+    position: Optional[str] = None
+    level: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    image: Optional[str] = None
+
+
+class ApplicationStatusInput(BaseModel):
+    status: str  # "accepted" | "rejected" | "pending"
+
+
 class ConversationInput(BaseModel):
     target_user_id: str
 
@@ -385,6 +399,32 @@ async def get_offer(offer_id: str, user: Dict[str, Any] = Depends(get_current_us
     return {"offer": o}
 
 
+@api_router.put("/offers/{offer_id}")
+async def update_offer(offer_id: str, inp: OfferUpdate, user: Dict[str, Any] = Depends(get_current_user)):
+    o = await db.offers.find_one({"offer_id": offer_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(status_code=404, detail="Offre introuvable")
+    if o["recruiter_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Action non autorisée")
+    updates = {k: v for k, v in inp.dict().items() if v is not None}
+    if updates:
+        await db.offers.update_one({"offer_id": offer_id}, {"$set": updates})
+    updated = await db.offers.find_one({"offer_id": offer_id}, {"_id": 0})
+    return {"offer": updated}
+
+
+@api_router.delete("/offers/{offer_id}")
+async def delete_offer(offer_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    o = await db.offers.find_one({"offer_id": offer_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(status_code=404, detail="Offre introuvable")
+    if o["recruiter_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Action non autorisée")
+    await db.offers.delete_one({"offer_id": offer_id})
+    await db.applications.delete_many({"offer_id": offer_id})
+    return {"ok": True}
+
+
 @api_router.get("/offers/{offer_id}/applications")
 async def offer_applications(offer_id: str, user: Dict[str, Any] = Depends(get_current_user)):
     apps = await db.applications.find({"offer_id": offer_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
@@ -447,6 +487,28 @@ async def apply(inp: ApplicationInput, user: Dict[str, Any] = Depends(get_curren
 async def my_applications(user: Dict[str, Any] = Depends(get_current_user)):
     apps = await db.applications.find({"athlete_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {"applications": apps}
+
+
+@api_router.put("/applications/{application_id}/status")
+async def update_application_status(application_id: str, inp: ApplicationStatusInput, user: Dict[str, Any] = Depends(get_current_user)):
+    if inp.status not in ("accepted", "rejected", "pending"):
+        raise HTTPException(status_code=400, detail="Statut invalide")
+    appdoc = await db.applications.find_one({"application_id": application_id}, {"_id": 0})
+    if not appdoc:
+        raise HTTPException(status_code=404, detail="Candidature introuvable")
+    if appdoc["recruiter_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Action non autorisée")
+    await db.applications.update_one({"application_id": application_id}, {"$set": {"status": inp.status}})
+    # Notify the athlete through their conversation.
+    if inp.status in ("accepted", "rejected"):
+        conv = await get_or_create_conversation(appdoc["recruiter_id"], appdoc["athlete_id"])
+        if inp.status == "accepted":
+            note = f"✅ Votre candidature pour « {appdoc.get('offer_title')} » a été acceptée !"
+        else:
+            note = f"❌ Votre candidature pour « {appdoc.get('offer_title')} » n'a pas été retenue."
+        await post_message_internal(conv["conversation_id"], user["user_id"], note)
+    updated = await db.applications.find_one({"application_id": application_id}, {"_id": 0})
+    return {"application": updated}
 
 
 # ----------------------------- Messaging -----------------------------

@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 4 backend-only: offer edit/delete + application status workflow. Extended /app/backend/tests/test_scoutmoi_api.py from 54 to 69 tests. Result: 69/69 pass (100%). Prior 54 regression tests all still green (auth, profile, athletes, offers create/list, applications apply, messaging text+image, presence, read receipts, pagination, AI). New 15 tests cover: (1) PUT /api/offers/{id} owner partial update (only provided fields change, others preserved, verified via GET); (2) PUT by another recruiter -> 403; (3) PUT by player -> 403; (4) PUT unknown id -> 404; (5) PUT /api/applications/{id}/status accepted by offer recruiter -> 200, status persisted, notification message with ✅ 'acceptée' posted into athlete<->recruiter conversation, /applications/mine reflects 'accepted' for the athlete; (6) status rejected -> 200, ❌ 'retenue' notification posted; (7) status pending -> 200 with NO ✅/❌ notification appended; (8) invalid status -> 400; (9) status by non-owner recruiter -> 403; (10) status by athlete -> 403; (11) status unknown app id -> 404; (12) DELETE by non-owner recruiter -> 403; (13) DELETE by player -> 403; (14) DELETE unknown -> 404; (15) DELETE by owner -> {ok:true}, subsequent GET offer -> 404, cascading applications gone (status update on old app id -> 404, /applications/mine no longer contains it).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/applications/{id}/status", "issue": "Reverting an already-accepted/rejected application back to 'pending' silently keeps the older ✅/❌ notification in the chat — no cancel/reset notification is posted. Cosmetic; consider posting a neutral 'candidature remise en attente' notification for clarity."},
+      {"endpoint": "PUT /api/applications/{id}/status", "issue": "Endpoint blindly reposts the accepted/rejected notification every call — a recruiter tapping 'Accepter' twice will duplicate the ✅ message. Consider making it idempotent (only post when status transitions to a new value)."},
+      {"endpoint": "DELETE /api/offers/{id}", "issue": "Cascade deletes applications but does NOT delete or notify the athlete<->recruiter conversation/messages. Old chat threads remain accessible after the offer is gone. May be intentional (preserve history) but should be documented."},
+      {"endpoint": "PUT /api/offers/{id}", "issue": "OfferUpdate treats explicit null as 'no change' (uses `v is not None` filter). Client cannot clear an optional field (image/location/position/level) by sending null; must send empty string. Consider using __fields_set__ / model_dump(exclude_unset=True) if clearing is desired."},
+      {"endpoint": "PUT /api/offers/{id}", "issue": "No validation that at least one field is supplied — empty payload returns 200 with the offer unchanged. Minor; could return 400 for empty update."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scoutmoi_api.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: make PUT /api/applications/{id}/status idempotent — only post ✅/❌ chat notification on actual transitions (avoid duplicate spam if recruiter double-taps).",
+    "Optional: post a 'remise en attente' neutral notification when status flips back to 'pending' after accepted/rejected.",
+    "Optional: switch OfferUpdate/ApplicationStatusInput filter to `model_dump(exclude_unset=True)` so clients can explicitly clear optional offer fields (image/location) by sending null.",
+    "Optional: decide policy for orphan conversations after DELETE /api/offers/{id} (keep for history vs archive) and document it.",
+    "Carry-over from iteration_1 & iteration_3 (frontend/UX): create-offer Description overlap, logout testID naming, wrap root with KeyboardProvider, migrate shadow*/pointerEvents deprecations, add limit clamp + secondary sort key to messages pagination."
+  ],
+  "critical_code_review_comments": [
+    "PUT/DELETE /api/offers/{id} correctly enforce ownership by comparing offer['recruiter_id'] == user['user_id'] and return 404 before 403 for unknown ids — no existence leak on ownership check.",
+    "update_application_status uses appdoc['recruiter_id'] which is the offer's recruiter (denormalized at apply-time) — auth check is correct.",
+    "Notification message uses post_message_internal via get_or_create_conversation(recruiter_id, athlete_id) — idempotent conversation lookup, safe.",
+    "delete_offer cascade uses db.applications.delete_many({offer_id}); correct. Messages/conversation intentionally preserved.",
+    "OfferUpdate/ApplicationStatusInput correctly use partial-model pattern with Optional fields; body validated by Pydantic.",
+    "server.py is now 779 lines — exceeds the 700-line soft threshold. Consider splitting into modules (auth.py, offers.py, applications.py, chat.py, ai.py) as noted in prior iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scoutmoi_api.py (appended 15 iter4 tests: 4 for PUT /offers, 4 for DELETE /offers, 7 for PUT /applications/{id}/status incl. notification cross-check via GET messages and /applications/mine)"
+  ],
+  "success_rate": {"backend": "100% (69/69)", "frontend": "not tested (backend-only iteration)"},
+  "seed_data_creation": "Reuses existing chained state (state['offer_id'], state['conv_id']) from iterations 1-2. Registers one additional ephemeral recruiter TEST_recr2_* to exercise non-owner 403 branches. Derives state['application_id'] from GET /api/applications/mine. Delete-offer test is intentionally scheduled last so cascade doesn't perturb prior tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression suite at /app/backend/tests/test_scoutmoi_api.py (now 69 tests, chained via module-level `state` dict). Run: `EXPO_PUBLIC_BACKEND_URL=https://athlete-jobs.preview.emergentagent.com pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml`. Iteration-4 endpoints: PUT/DELETE /api/offers/{id} (owner-only, 403/404 semantics), PUT /api/applications/{id}/status with statuses accepted|rejected|pending; accepted/rejected post a ✅/❌ chat notification into athlete<->recruiter conversation (visible via GET messages). Delete cascade removes applications but keeps the conversation/messages. Order-sensitive: iter4 delete-offer test MUST remain the last test — after it runs state['offer_id'] no longer exists.",
+  "rca_of_issue": "N/A — no functional bugs found. All 10 explicit review-request assertions pass (owner update partial, non-owner 403, unknown 404, owner delete cascades applications with GET->404, non-owner delete 403, status by recruiter accepted/rejected/pending, invalid status 400, non-recruiter 403, unknown app 404, chat notification on accept/reject, /applications/mine reflects new status, all previous 54 regression tests still pass)."
+}
