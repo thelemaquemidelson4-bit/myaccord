@@ -151,7 +151,8 @@ class ConversationInput(BaseModel):
 
 
 class MessageInput(BaseModel):
-    text: str
+    text: Optional[str] = None
+    image: Optional[str] = None
 
 
 class AISummaryInput(BaseModel):
@@ -430,18 +431,20 @@ async def my_applications(user: Dict[str, Any] = Depends(get_current_user)):
 
 
 # ----------------------------- Messaging -----------------------------
-async def post_message_internal(conversation_id: str, sender_id: str, text: str) -> Dict[str, Any]:
+async def post_message_internal(conversation_id: str, sender_id: str, text: Optional[str] = None, image: Optional[str] = None) -> Dict[str, Any]:
     msg = {
         "message_id": new_id("msg"),
         "conversation_id": conversation_id,
         "sender_id": sender_id,
         "text": text,
+        "image": image,
         "created_at": now_utc().isoformat(),
     }
     await db.messages.insert_one(dict(msg))
+    preview = "📷 Photo" if image and not text else (text or "")
     await db.conversations.update_one(
         {"conversation_id": conversation_id},
-        {"$set": {"last_message": text, "last_at": now_utc().isoformat()}},
+        {"$set": {"last_message": preview, "last_at": now_utc().isoformat()}},
     )
     return msg
 
@@ -493,7 +496,9 @@ async def send_message_route(conversation_id: str, inp: MessageInput, user: Dict
     conv = await db.conversations.find_one({"conversation_id": conversation_id}, {"_id": 0})
     if not conv or user["user_id"] not in conv["participants"]:
         raise HTTPException(status_code=404, detail="Conversation introuvable")
-    msg = await post_message_internal(conversation_id, user["user_id"], inp.text)
+    if not inp.text and not inp.image:
+        raise HTTPException(status_code=400, detail="Message vide")
+    msg = await post_message_internal(conversation_id, user["user_id"], inp.text, inp.image)
     msg.pop("_id", None)
     return {"message": msg}
 

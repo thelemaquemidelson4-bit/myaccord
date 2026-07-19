@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.athletejobs.mxkx1l",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Ajoutez une photo à votre profil sportif"
+        "NSPhotoLibraryUsageDescription": "Ajoutez une photo à votre profil sportif",
+        "NSCameraUsageDescription": "Prenez une photo à envoyer dans vos messages"
       }
     },
     "android": {
@@ -33,7 +34,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Ajoutez une photo à votre profil sportif"
+          "photosPermission": "Ajoutez une photo à votre profil sportif",
+          "cameraPermission": "Prenez une photo à envoyer dans vos messages"
         }
       ],
       [

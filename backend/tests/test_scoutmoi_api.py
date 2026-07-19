@@ -255,6 +255,133 @@ def test_get_messages_forbidden_for_outsider(base_url, session):
     assert r.status_code == 404
 
 
+# ---------- Messaging: TEXT + IMAGE (iteration 2) ----------
+# 1x1 transparent PNG data URI (tiny, valid base64)
+TINY_PNG_DATA_URI = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+)
+
+
+def test_send_text_only_message(base_url, session):
+    r = session.post(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        json={"text": "Bonjour texte seul"},
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 200, r.text
+    msg = r.json()["message"]
+    assert msg["text"] == "Bonjour texte seul"
+    assert msg.get("image") is None
+    assert msg["conversation_id"] == state["conv_id"]
+    assert "message_id" in msg and "created_at" in msg
+
+
+def test_send_image_only_message(base_url, session):
+    r = session.post(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        json={"image": TINY_PNG_DATA_URI},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 200, r.text
+    msg = r.json()["message"]
+    assert msg.get("text") is None
+    assert msg["image"] == TINY_PNG_DATA_URI
+
+
+def test_send_empty_message_400(base_url, session):
+    r = session.post(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        json={},
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 400
+    assert "vide" in r.json().get("detail", "").lower()
+
+
+def test_send_both_null_message_400(base_url, session):
+    r = session.post(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        json={"text": None, "image": None},
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 400
+
+
+def test_get_messages_include_image_field(base_url, session):
+    r = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 200
+    msgs = r.json()["messages"]
+    # Every message must expose text and image keys (either value or None)
+    for m in msgs:
+        assert "text" in m
+        assert "image" in m
+    # At least one image-only message present (from previous test)
+    img_msgs = [m for m in msgs if m.get("image")]
+    assert len(img_msgs) >= 1
+    assert any(m.get("image") == TINY_PNG_DATA_URI for m in img_msgs)
+
+
+def test_conversations_last_message_photo_preview(base_url, session):
+    # Send another image-only as the *last* message
+    r0 = session.post(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        json={"image": TINY_PNG_DATA_URI},
+        headers=_hdr(state["player_token"]),
+    )
+    assert r0.status_code == 200
+    # Now list conversations and check preview
+    r = session.get(f"{base_url}/api/conversations", headers=_hdr(state["player_token"]))
+    assert r.status_code == 200
+    convs = r.json()["conversations"]
+    target = next((c for c in convs if c["conversation_id"] == state["conv_id"]), None)
+    assert target is not None
+    assert target["last_message"] == "📷 Photo"
+
+
+def test_conversations_last_message_text_preview(base_url, session):
+    # After sending a text message, preview should equal text
+    text = "Regression preview text"
+    r0 = session.post(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        json={"text": text},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r0.status_code == 200
+    r = session.get(f"{base_url}/api/conversations", headers=_hdr(state["recruiter_token"]))
+    assert r.status_code == 200
+    convs = r.json()["conversations"]
+    target = next((c for c in convs if c["conversation_id"] == state["conv_id"]), None)
+    assert target is not None
+    assert target["last_message"] == text
+
+
+def test_non_participant_cannot_post_message(base_url, session):
+    email = f"TEST_outpost_{uuid.uuid4().hex[:6]}@t.com"
+    reg = session.post(f"{base_url}/api/auth/register", json={
+        "email": email, "password": "pass1234", "name": "Outsider2", "role": "player"
+    })
+    tok = reg.json()["token"]
+    r = session.post(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        json={"text": "hack"},
+        headers=_hdr(tok),
+    )
+    assert r.status_code == 404
+
+
+def test_send_message_to_unknown_conversation_404(base_url, session):
+    r = session.post(
+        f"{base_url}/api/conversations/conv_doesnotexist/messages",
+        json={"text": "hi"},
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 404
+
+
 def test_start_conversation_endpoint(base_url, session):
     r = session.post(f"{base_url}/api/conversations",
                      json={"target_user_id": state["recruiter_id"]},

@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 2 backend-only regression. Focus: messaging TEXT+IMAGE feature. Extended /app/backend/tests/test_scoutmoi_api.py from 34 to 43 tests (all passed, 43/43, 100%). New coverage: (1) POST /api/conversations/{id}/messages with {text} only -> 200, text stored, image=null; (2) with {image} only (base64 data URI) -> 200, image stored, text=null; (3) with {} -> 400 'Message vide'; (4) with {text:null,image:null} -> 400 (extra edge case); (5) GET /api/conversations/{id}/messages returns list where every message exposes 'text' and 'image' fields; (6) GET /api/conversations last_message='📷 Photo' when last message is image-only; (7) last_message reverts to text content when a text is sent afterwards; (8) non-participant POST returns 404; (9) POST to unknown conversation returns 404. Regression on the previous 34 tests (auth register/login/me/logout, profile, athletes, offers CRUD + role guards, applications + auto-conversation, list/get/send messages, AI profile-summary + match-suggestions with role guard) still all pass. AI endpoints responded within timeout via Emergent LLM key (Claude Sonnet).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/conversations/{id}/messages", "issue": "No size/length validation on image field. A very large base64 data URI (e.g., multi-MB) will be accepted and stored inline in MongoDB, which can bloat documents and slow GET /messages. Consider max size guard (e.g., <= 2MB base64) and mime-type/prefix validation ('data:image/...') at the API layer."},
+      {"endpoint": "POST /api/conversations/{id}/messages", "issue": "No max length on text (accepts arbitrarily long strings). Consider a reasonable cap (e.g., 4000 chars) to protect DB and UI."},
+      {"endpoint": "GET /api/conversations/{id}/messages", "issue": "Returns up to 1000 messages with full image payloads inline; combined with 2s polling this can transfer large payloads repeatedly. Consider pagination (?after=<message_id>) or stripping image and exposing via a separate endpoint."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scoutmoi_api.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: add server-side validation for image (max base64 length, data URI prefix check) and text (max length) to prevent oversized payloads.",
+    "Optional: paginate GET /api/conversations/{id}/messages or serve image bytes separately to keep 2s polling cheap.",
+    "Prior iteration_1 items are still open (create-offer Description overlap, logout testID naming, wrap root with KeyboardProvider, migrate shadow*/pointerEvents deprecations)."
+  ],
+  "critical_code_review_comments": [
+    "post_message_internal correctly derives preview '📷 Photo' when image-only and text otherwise. The preview does NOT fall back to '📷 Photo' when BOTH text and image are provided — current behavior shows the text preview which is a reasonable choice.",
+    "MessageInput allows empty strings; the check `not inp.text and not inp.image` treats empty-string as falsy, so {'text':'', 'image':''} correctly 400s. Good.",
+    "conversation participant check in both GET and POST is identical (404 with 'Conversation introuvable') — consistent behavior, does not leak existence.",
+    "post_message_internal stores raw base64 data URI directly in Mongo — acceptable for MVP but see minor issues above."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scoutmoi_api.py (added 9 new tests for TEXT+IMAGE messaging + edge cases)"
+  ],
+  "success_rate": {"backend": "100% (43/43)", "frontend": "not tested (backend-only iteration)"},
+  "seed_data_creation": "Uses existing seed accounts leo@test.com / coach@test.com (auto-created if missing). New tests reuse state['conv_id'] from earlier application flow; add TEST_outpost_* and TEST_lo_* ephemeral users.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression suite is at /app/backend/tests/test_scoutmoi_api.py (43 tests, module-level `state` dict chained). Run: `EXPO_PUBLIC_BACKEND_URL=https://athlete-jobs.preview.emergentagent.com pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml`. Messaging image tests use a 1x1 transparent PNG data URI constant TINY_PNG_DATA_URI. If future iterations paginate messages or reject oversized images, update the assertions in test_get_messages_include_image_field and test_conversations_last_message_photo_preview accordingly.",
+  "rca_of_issue": "N/A — no bugs found in the new TEXT+IMAGE messaging feature. All specified acceptance criteria met and full regression green."
+}
