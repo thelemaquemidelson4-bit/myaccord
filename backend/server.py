@@ -498,9 +498,10 @@ async def update_application_status(application_id: str, inp: ApplicationStatusI
         raise HTTPException(status_code=404, detail="Candidature introuvable")
     if appdoc["recruiter_id"] != user["user_id"]:
         raise HTTPException(status_code=403, detail="Action non autorisée")
+    changed = appdoc.get("status") != inp.status
     await db.applications.update_one({"application_id": application_id}, {"$set": {"status": inp.status}})
-    # Notify the athlete through their conversation.
-    if inp.status in ("accepted", "rejected"):
+    # Notify the athlete through their conversation (only on an actual change).
+    if changed and inp.status in ("accepted", "rejected"):
         conv = await get_or_create_conversation(appdoc["recruiter_id"], appdoc["athlete_id"])
         if inp.status == "accepted":
             note = f"✅ Votre candidature pour « {appdoc.get('offer_title')} » a été acceptée !"

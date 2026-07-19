@@ -46,3 +46,4 @@
 - 2026-06-19: Renommage en "Intake" + logo intégré (écrans, icône, splash). Thème bleu & blanc clair translucide.
 - 2026-06-19 (iter 2): Messagerie enrichie — texte temps quasi-réel (polling 2s) + envoi de photos (galerie + caméra, base64), aperçu image plein écran, permissions gérées. Backend 43/43 tests.
 - 2026-06-19 (iter 3): Chat — indicateur "En ligne" (point vert, fenêtre 45s + heartbeat 20s), accusés de lecture ("Vu"/"Envoyé"), badges non-lus, pagination (limit/before/after → polling léger sans re-télécharger les images). Backend 54/54 tests.
+- 2026-06-19 (iter 4): Gestion des offres (édition PUT /offers/{id}, suppression DELETE avec cascade des candidatures) + workflow de candidatures (accept/refus/pending, notification auto dans le chat, statuts colorés côté athlète). Idempotence des notifications. Backend 69/69 tests.
