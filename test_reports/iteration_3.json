@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 3 backend-only regression + new chat features (presence, read receipts, pagination). Extended /app/backend/tests/test_scoutmoi_api.py from 43 to 54 tests, all pass (54/54, 100%). New coverage (11 tests): (1) POST /api/presence -> 200 {ok:true} + other user's /conversations reflects online=true & last_seen; (2) POST /api/presence unauth -> 401; (3) GET /api/conversations returns per-conv 'unread' int and other.online/other.last_seen, unread reflects messages from the other after my last read; (4) GET messages marks caller as read (unread becomes 0 for caller) and refreshes caller's presence (online true seen by peer); (5) After A reads, B sees 'other_last_read' populated (ISO parseable); (6) ?limit=N returns N latest ascending, has_more=true when more exist; (7) ?before=<iso>&limit=N returns older messages strictly < iso, ascending, has_more boolean; (8) ?after=<iso> returns only messages strictly created_at > iso, empty when none, otherwise polling contains the freshly-posted (text+image) message without resending older base64 images; (9) Non-participant GET messages -> 404; (10) Unknown conversation -> 404; (11) Response shape check (keys: messages, other, other_last_read, has_more; other has user_id/name/role/last_seen/online). Full regression from iterations 1 & 2 remains green (auth, profile, athletes, offers, applications, text+image messaging, AI summary & match).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/conversations/{id}/messages", "issue": "Pagination uses ISO string comparison on created_at (works because format is lexicographically sortable), but rapid inserts sometimes share the same millisecond; sort order across ties is undefined. Consider adding a secondary monotonic key (e.g., message_id or _id) as tiebreaker to guarantee stable ordering and avoid rare boundary cases when polling with after=."},
+      {"endpoint": "GET /api/conversations/{id}/messages", "issue": "Unbounded 'limit' query param (Query(30) with no ge/le). A client can request limit=1000000 forcing to_list(1000000). Consider clamping: limit=Query(30, ge=1, le=100)."},
+      {"endpoint": "GET /api/conversations/{id}/messages", "issue": "?after=<iso> uses to_list(500) hard-coded and ignores 'limit'. For very active conversations this cap could clip polling batches. Consider making it consistent with 'limit' or documenting the 500 cap."},
+      {"endpoint": "GET /api/conversations/{id}/messages", "issue": "GET has a side effect (writes reads.<uid> and touches presence). RESTfully this is a POST-worthy action; acceptable for MVP but note that repeated GETs from React Native polling cause an extra Mongo write every poll cycle. Consider updating only when new content is actually seen (e.g., after messages array is non-empty for the caller)."},
+      {"endpoint": "POST /api/presence", "issue": "No rate limiting. Frontend polling could spam this endpoint. Consider batching last_seen update inside get_messages (already done) and skipping presence when GET messages just ran."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scoutmoi_api.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: clamp GET /api/conversations/{id}/messages 'limit' with ge=1/le=100 and honor it for the after= branch.",
+    "Optional: add message_id (or _id) as secondary sort key for created_at ties, and switch pagination cursors from ISO strings to (created_at, message_id) tuples encoded into a single opaque cursor.",
+    "Optional: reduce writes in GET messages side-effects (only update reads when there are new messages from the other participant).",
+    "Prior iteration_1 items still open (create-offer Description overlap, logout testID naming, wrap root with KeyboardProvider, migrate shadow*/pointerEvents deprecations)."
+  ],
+  "critical_code_review_comments": [
+    "is_online() uses a 45s window and gracefully handles naive datetimes by reattaching UTC; good.",
+    "touch_presence() writes on every send_message_internal and on every GET messages — presence stays fresh without needing frequent POST /api/presence calls from the client.",
+    "get_messages sets reads.<user_id> BEFORE reading conv.reads for other_last_read, but it reads 'conv' fetched earlier (pre-update), so other_last_read reflects the peer's last read (not the current caller) — correct.",
+    "list_conversations correctly uses $gt vs my_read to count only NEW messages from the other side; when reads is missing, all messages from other are counted as unread — correct behavior on first fetch.",
+    "get_messages 404 for non-participant is uniform with POST — no existence leak. Good.",
+    "server.py is 717 lines — still under the 700 threshold per file but on the edge; consider splitting routes into modules (auth, offers, chat, ai) if further features land."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scoutmoi_api.py (added 11 new tests: presence x2, unread counts, read-marking + presence refresh, other_last_read receipt, pagination limit/before/after, non-participant + unknown 404, response shape)"
+  ],
+  "success_rate": {"backend": "100% (54/54)", "frontend": "not tested (backend-only iteration)"},
+  "seed_data_creation": "Uses existing seed accounts leo@test.com / coach@test.com (auto-created if missing). Reuses state['conv_id'] chain from earlier application flow; new tests add ephemeral TEST_np_* users.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression suite at /app/backend/tests/test_scoutmoi_api.py (54 tests, module-level `state` dict chained across tests). Run: `EXPO_PUBLIC_BACKEND_URL=https://athlete-jobs.preview.emergentagent.com pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml`. Iteration-3 chat semantics: presence is TIME-BASED (45s window from last_seen); tests rely on POST/GET calls to refresh last_seen so 'online' is true right after. For after= tests use a wall-clock ISO timestamp (datetime.now(UTC).isoformat()) rather than relying on message-list ordering to avoid ISO-string tie flakiness. If pagination cursor format changes (e.g., to (created_at,message_id)), update test_pagination_limit_and_has_more / _before / _after accordingly.",
+  "rca_of_issue": "N/A — no functional bugs found. During test authoring, one flaky assertion appeared when computing after=max(created_at) across rapid inserts sharing an ISO millisecond; resolved by using a fresh datetime.now() boundary. Main agent may want to add a secondary sort key (message_id) to created_at to guarantee stable ordering when polling clients are aggressive."
+}

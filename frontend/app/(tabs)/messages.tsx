@@ -46,13 +46,27 @@ export default function Messages() {
                 onPress={() => router.push(`/chat/${item.conversation_id}`)}
                 style={styles.row}
               >
-                <Avatar uri={other?.photo} name={title} size={52} />
+                <View>
+                  <Avatar uri={other?.photo} name={title} size={52} />
+                  {other?.online && <View style={styles.onlineDot} testID={`online-${item.conversation_id}`} />}
+                </View>
                 <View style={{ flex: 1, marginLeft: spacing.md }}>
                   <AppText variant="label" numberOfLines={1}>{title}</AppText>
-                  <AppText variant="caption" numberOfLines={1} style={{ marginTop: 3 }}>
+                  <AppText
+                    variant="caption"
+                    color={item.unread > 0 ? colors.onSurface : colors.onSurfaceTertiary}
+                    weight={item.unread > 0 ? "semibold" : "regular"}
+                    numberOfLines={1}
+                    style={{ marginTop: 3 }}
+                  >
                     {item.last_message || "Démarrer la conversation"}
                   </AppText>
                 </View>
+                {item.unread > 0 && (
+                  <View style={styles.unreadBadge} testID={`unread-${item.conversation_id}`}>
+                    <AppText variant="caption" color={colors.onBrandPrimary} weight="bold">{item.unread}</AppText>
+                  </View>
+                )}
               </Pressable>
             );
           }}
@@ -83,4 +97,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
+  onlineDot: { position: "absolute", right: 0, bottom: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: colors.success, borderWidth: 2, borderColor: colors.surface },
+  unreadBadge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, marginLeft: spacing.sm },
 });

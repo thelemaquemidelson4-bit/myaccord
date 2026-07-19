@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -91,6 +91,25 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[
         raise HTTPException(status_code=401, detail="Utilisateur introuvable")
     user.pop("password", None)
     return user
+
+
+ONLINE_WINDOW = 45  # seconds
+
+
+def is_online(last_seen) -> bool:
+    if not last_seen:
+        return False
+    try:
+        dt = datetime.fromisoformat(last_seen) if isinstance(last_seen, str) else last_seen
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (now_utc() - dt).total_seconds() < ONLINE_WINDOW
+    except Exception:
+        return False
+
+
+async def touch_presence(user_id: str):
+    await db.users.update_one({"user_id": user_id}, {"$set": {"last_seen": now_utc().isoformat()}})
 
 
 # ----------------------------- Models -----------------------------
@@ -446,7 +465,14 @@ async def post_message_internal(conversation_id: str, sender_id: str, text: Opti
         {"conversation_id": conversation_id},
         {"$set": {"last_message": preview, "last_at": now_utc().isoformat()}},
     )
+    await touch_presence(sender_id)
     return msg
+
+
+@api_router.post("/presence")
+async def presence(user: Dict[str, Any] = Depends(get_current_user)):
+    await touch_presence(user["user_id"])
+    return {"ok": True}
 
 
 @api_router.post("/conversations")
@@ -465,30 +491,82 @@ async def list_conversations(user: Dict[str, Any] = Depends(get_current_user)):
     for c in convs:
         other_id = next((p for p in c["participants"] if p != user["user_id"]), None)
         other = await db.users.find_one({"user_id": other_id}, {"_id": 0, "password": 0}) if other_id else None
+        my_read = (c.get("reads") or {}).get(user["user_id"])
+        unread_q: Dict[str, Any] = {"conversation_id": c["conversation_id"], "sender_id": other_id}
+        if my_read:
+            unread_q["created_at"] = {"$gt": my_read}
+        unread = await db.messages.count_documents(unread_q) if other_id else 0
         result.append({
             "conversation_id": c["conversation_id"],
             "last_message": c.get("last_message"),
             "last_at": c.get("last_at"),
+            "unread": unread,
             "other": {
                 "user_id": other.get("user_id"),
                 "name": other.get("name"),
                 "photo": other.get("photo"),
                 "role": other.get("role"),
                 "club_name": other.get("club_name"),
+                "last_seen": other.get("last_seen"),
+                "online": is_online(other.get("last_seen")),
             } if other else None,
         })
     return {"conversations": result}
 
 
 @api_router.get("/conversations/{conversation_id}/messages")
-async def get_messages(conversation_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+async def get_messages(
+    conversation_id: str,
+    after: Optional[str] = Query(None),
+    before: Optional[str] = Query(None),
+    limit: int = Query(30),
+    user: Dict[str, Any] = Depends(get_current_user),
+):
     conv = await db.conversations.find_one({"conversation_id": conversation_id}, {"_id": 0})
     if not conv or user["user_id"] not in conv["participants"]:
         raise HTTPException(status_code=404, detail="Conversation introuvable")
-    msgs = await db.messages.find({"conversation_id": conversation_id}, {"_id": 0}).sort("created_at", 1).to_list(1000)
     other_id = next((p for p in conv["participants"] if p != user["user_id"]), None)
+
+    # Mark this conversation as read by the current user + refresh presence.
+    now_iso = now_utc().isoformat()
+    await db.conversations.update_one(
+        {"conversation_id": conversation_id},
+        {"$set": {f"reads.{user['user_id']}": now_iso}},
+    )
+    await touch_presence(user["user_id"])
+
+    base: Dict[str, Any] = {"conversation_id": conversation_id}
+    has_more = False
+    if after:
+        q = {**base, "created_at": {"$gt": after}}
+        msgs = await db.messages.find(q, {"_id": 0}).sort("created_at", 1).to_list(500)
+    elif before:
+        q = {**base, "created_at": {"$lt": before}}
+        docs = await db.messages.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
+        docs.reverse()
+        msgs = docs
+        if msgs:
+            older = await db.messages.count_documents({**base, "created_at": {"$lt": msgs[0]["created_at"]}})
+            has_more = older > 0
+    else:
+        docs = await db.messages.find(base, {"_id": 0}).sort("created_at", -1).to_list(limit)
+        docs.reverse()
+        msgs = docs
+        total = await db.messages.count_documents(base)
+        has_more = total > len(msgs)
+
     other = await db.users.find_one({"user_id": other_id}, {"_id": 0, "password": 0}) if other_id else None
-    return {"messages": msgs, "other": public_user(other) if other else None}
+    other_out = {
+        "user_id": other.get("user_id"),
+        "name": other.get("name"),
+        "photo": other.get("photo"),
+        "role": other.get("role"),
+        "club_name": other.get("club_name"),
+        "last_seen": other.get("last_seen"),
+        "online": is_online(other.get("last_seen")),
+    } if other else None
+    other_last_read = (conv.get("reads") or {}).get(other_id) if other_id else None
+    return {"messages": msgs, "other": other_out, "other_last_read": other_last_read, "has_more": has_more}
 
 
 @api_router.post("/conversations/{conversation_id}/messages")

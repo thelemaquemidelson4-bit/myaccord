@@ -17,49 +17,99 @@ export default function Chat() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const listRef = useRef<FlatList>(null);
+  const latestRef = useRef<string>("");
+  const oldestRef = useRef<string>("");
+  const autoScroll = useRef<boolean>(true);
 
   const [messages, setMessages] = useState<any[]>([]);
   const [other, setOther] = useState<any>(null);
+  const [otherLastRead, setOtherLastRead] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [attachOpen, setAttachOpen] = useState(false);
   const [permDenied, setPermDenied] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const applyNew = useCallback((incoming: any[], reset: boolean) => {
+    setMessages((prev) => {
+      const base = reset ? [] : prev.filter((m) => !String(m.message_id).startsWith("tmp_"));
+      const ids = new Set(base.map((m) => m.message_id));
+      const merged = [...base, ...incoming.filter((m) => !ids.has(m.message_id))];
+      merged.sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+      if (merged.length) {
+        latestRef.current = merged[merged.length - 1].created_at;
+        oldestRef.current = merged[0].created_at;
+      }
+      return merged;
+    });
+  }, []);
+
+  const initialLoad = useCallback(async () => {
     try {
-      const data = await api.get(`/conversations/${id}/messages`);
-      setMessages(data.messages);
+      const data = await api.get(`/conversations/${id}/messages?limit=30`);
       setOther(data.other);
+      setOtherLastRead(data.other_last_read);
+      setHasMore(data.has_more);
+      applyNew(data.messages, true);
     } catch {} finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, applyNew]);
+
+  const pollNew = useCallback(async () => {
+    if (!latestRef.current) return;
+    try {
+      const data = await api.get(`/conversations/${id}/messages?after=${encodeURIComponent(latestRef.current)}`);
+      setOther(data.other);
+      setOtherLastRead(data.other_last_read);
+      if (data.messages.length) applyNew(data.messages, false);
+    } catch {}
+  }, [id, applyNew]);
+
+  const loadOlder = useCallback(async () => {
+    if (!oldestRef.current || loadingOlder) return;
+    setLoadingOlder(true);
+    autoScroll.current = false;
+    try {
+      const data = await api.get(`/conversations/${id}/messages?before=${encodeURIComponent(oldestRef.current)}&limit=30`);
+      setHasMore(data.has_more);
+      setMessages((prev) => {
+        const ids = new Set(prev.map((m) => m.message_id));
+        const older = data.messages.filter((m: any) => !ids.has(m.message_id));
+        const merged = [...older, ...prev];
+        if (merged.length) oldestRef.current = merged[0].created_at;
+        return merged;
+      });
+    } catch {} finally {
+      setLoadingOlder(false);
+      setTimeout(() => { autoScroll.current = true; }, 400);
+    }
+  }, [id, loadingOlder]);
 
   useEffect(() => {
-    load();
-    const t = setInterval(load, 2000);
+    initialLoad();
+    const t = setInterval(pollNew, 2000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [initialLoad, pollNew]);
 
   const sendText = async () => {
     const t = text.trim();
     if (!t) return;
     setText("");
-    const optimistic = { message_id: `tmp_${Date.now()}`, sender_id: user?.user_id, text: t, created_at: new Date().toISOString() };
-    setMessages((m) => [...m, optimistic]);
+    setMessages((m) => [...m, { message_id: `tmp_${Date.now()}`, sender_id: user?.user_id, text: t, created_at: new Date().toISOString() }]);
     try {
       await api.post(`/conversations/${id}/messages`, { text: t });
-      load();
+      pollNew();
     } catch {}
   };
 
   const sendImage = async (base64: string) => {
-    const optimistic = { message_id: `tmp_${Date.now()}`, sender_id: user?.user_id, image: base64, created_at: new Date().toISOString() };
-    setMessages((m) => [...m, optimistic]);
+    setMessages((m) => [...m, { message_id: `tmp_${Date.now()}`, sender_id: user?.user_id, image: base64, created_at: new Date().toISOString() }]);
     try {
       await api.post(`/conversations/${id}/messages`, { image: base64 });
-      load();
+      pollNew();
     } catch {}
   };
 
@@ -86,6 +136,10 @@ export default function Chat() {
   };
 
   const title = other?.club_name || other?.name || "Conversation";
+  const lastMine = [...messages].reverse().find((m) => m.sender_id === user?.user_id && !String(m.message_id).startsWith("tmp_"));
+  const seen = !!(lastMine && otherLastRead && otherLastRead >= lastMine.created_at);
+
+  const presenceText = other?.online ? "En ligne" : (other?.last_seen ? "Hors ligne" : "");
 
   return (
     <View style={styles.container}>
@@ -97,8 +151,18 @@ export default function Chat() {
           style={styles.titleRow}
           onPress={() => other?.role === "player" && other?.user_id && router.push(`/athlete/${other.user_id}`)}
         >
-          <Avatar uri={other?.photo} name={title} size={36} />
-          <AppText variant="label" style={{ marginLeft: spacing.sm }} numberOfLines={1}>{title}</AppText>
+          <View>
+            <Avatar uri={other?.photo} name={title} size={38} />
+            {other?.online && <View style={styles.onlineDot} testID="online-dot" />}
+          </View>
+          <View style={{ marginLeft: spacing.sm, flexShrink: 1 }}>
+            <AppText variant="label" numberOfLines={1}>{title}</AppText>
+            {!!presenceText && (
+              <AppText variant="caption" color={other?.online ? colors.success : colors.onSurfaceTertiary} numberOfLines={1}>
+                {presenceText}
+              </AppText>
+            )}
+          </View>
         </Pressable>
         <View style={{ width: 40 }} />
       </View>
@@ -113,19 +177,38 @@ export default function Chat() {
             keyExtractor={(m) => m.message_id}
             contentContainerStyle={{ padding: spacing.lg, flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            onContentSizeChange={() => { if (autoScroll.current) listRef.current?.scrollToEnd({ animated: false }); }}
+            ListHeaderComponent={
+              hasMore ? (
+                <Pressable testID="load-older" onPress={loadOlder} style={styles.loadOlder}>
+                  {loadingOlder ? (
+                    <ActivityIndicator color={colors.brandPrimary} size="small" />
+                  ) : (
+                    <AppText variant="caption" color={colors.brandPrimary} weight="semibold">Charger les messages précédents</AppText>
+                  )}
+                </Pressable>
+              ) : null
+            }
             renderItem={({ item }) => {
               const mine = item.sender_id === user?.user_id;
+              const isLastMine = mine && lastMine && item.message_id === lastMine.message_id;
               return (
-                <View style={[styles.bubbleRow, mine ? styles.rowRight : styles.rowLeft]}>
-                  {item.image ? (
-                    <Pressable testID={`msg-image-${item.message_id}`} onPress={() => setPreview(item.image)}>
-                      <Image source={{ uri: item.image }} style={styles.msgImage} contentFit="cover" />
-                    </Pressable>
-                  ) : (
-                    <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
-                      <AppText variant="body" color={mine ? colors.onBrandPrimary : colors.onSurface}>{item.text}</AppText>
-                    </View>
+                <View>
+                  <View style={[styles.bubbleRow, mine ? styles.rowRight : styles.rowLeft]}>
+                    {item.image ? (
+                      <Pressable testID={`msg-image-${item.message_id}`} onPress={() => setPreview(item.image)}>
+                        <Image source={{ uri: item.image }} style={styles.msgImage} contentFit="cover" />
+                      </Pressable>
+                    ) : (
+                      <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
+                        <AppText variant="body" color={mine ? colors.onBrandPrimary : colors.onSurface}>{item.text}</AppText>
+                      </View>
+                    )}
+                  </View>
+                  {isLastMine && (
+                    <AppText variant="caption" color={colors.onSurfaceTertiary} style={styles.receipt} testID="read-receipt">
+                      {seen ? "Vu" : "Envoyé"}
+                    </AppText>
                   )}
                 </View>
               );
@@ -156,7 +239,6 @@ export default function Chat() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Attach menu */}
       <Modal visible={attachOpen} transparent animationType="fade" onRequestClose={() => setAttachOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setAttachOpen(false)} />
         <View style={[styles.attachSheet, { paddingBottom: insets.bottom + spacing.lg }]}>
@@ -176,7 +258,6 @@ export default function Chat() {
         </View>
       </Modal>
 
-      {/* Image preview */}
       <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
         <Pressable style={styles.previewBackdrop} onPress={() => setPreview(null)} testID="close-preview">
           {preview && <Image source={{ uri: preview }} style={styles.previewImage} contentFit="contain" />}
@@ -189,16 +270,19 @@ export default function Chat() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
-  titleRow: { flexDirection: "row", alignItems: "center", flex: 1, justifyContent: "center", paddingHorizontal: spacing.sm },
+  titleRow: { flexDirection: "row", alignItems: "center", flex: 1, paddingHorizontal: spacing.sm },
+  onlineDot: { position: "absolute", right: 0, bottom: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.success, borderWidth: 2, borderColor: colors.surface },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  bubbleRow: { marginBottom: spacing.sm, flexDirection: "row" },
+  loadOlder: { alignItems: "center", paddingVertical: spacing.md, marginBottom: spacing.sm },
+  bubbleRow: { marginBottom: 2, flexDirection: "row" },
   rowRight: { justifyContent: "flex-end" },
   rowLeft: { justifyContent: "flex-start" },
   bubble: { maxWidth: "78%", paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.md },
   bubbleMine: { backgroundColor: colors.brandPrimary, borderBottomRightRadius: 4 },
   bubbleOther: { backgroundColor: colors.cardSolid, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: colors.border },
   msgImage: { width: 200, height: 200, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
+  receipt: { alignSelf: "flex-end", marginBottom: spacing.sm, marginTop: 2 },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",

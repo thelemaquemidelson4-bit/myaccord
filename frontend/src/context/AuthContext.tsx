@@ -50,6 +50,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [refresh]);
 
+  // Presence heartbeat: mark the user online while the app is open.
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const beat = () => { api.post("/presence").catch(() => {}); };
+    beat();
+    const t = setInterval(() => { if (active) beat(); }, 20000);
+    return () => { active = false; clearInterval(t); };
+  }, [user]);
+
   const register = useCallback(async (email: string, password: string, name: string, role: string) => {
     const data = await api.post("/auth/register", { email, password, name, role }, false);
     await persist(data.token, data.user);

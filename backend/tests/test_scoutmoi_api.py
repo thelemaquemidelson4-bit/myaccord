@@ -417,6 +417,221 @@ def test_ai_match_forbidden_for_player(base_url, session):
     assert r.status_code == 403
 
 
+# ---------- Iteration 3: Presence, Read Receipts, Pagination ----------
+def test_presence_endpoint_updates_last_seen(base_url, session):
+    r = session.post(f"{base_url}/api/presence", headers=_hdr(state["player_token"]))
+    assert r.status_code == 200, r.text
+    assert r.json() == {"ok": True}
+    # Verify last_seen is updated -> other side sees us online in /conversations
+    r2 = session.get(f"{base_url}/api/conversations", headers=_hdr(state["recruiter_token"]))
+    assert r2.status_code == 200
+    convs = r2.json()["conversations"]
+    target = next((c for c in convs if c["conversation_id"] == state["conv_id"]), None)
+    assert target is not None
+    assert target["other"] is not None
+    assert target["other"]["user_id"] == state["player_id"]
+    assert target["other"]["online"] is True
+    assert target["other"]["last_seen"]  # ISO string
+
+
+def test_presence_requires_auth(base_url, session):
+    r = session.post(f"{base_url}/api/presence")
+    assert r.status_code == 401
+
+
+def test_conversations_include_unread_count(base_url, session):
+    # Ensure recruiter has an unread by sending 2 messages from player
+    for txt in ("unread-1 " + uuid.uuid4().hex[:6], "unread-2 " + uuid.uuid4().hex[:6]):
+        r = session.post(
+            f"{base_url}/api/conversations/{state['conv_id']}/messages",
+            json={"text": txt}, headers=_hdr(state["player_token"]),
+        )
+        assert r.status_code == 200
+    # Recruiter has NOT read yet (in this test) - but earlier tests may have. So we
+    # verify the count is >=2 (at least the two we just sent) OR read receipt kicks
+    # in after GET messages. We haven't called GET as recruiter after these sends.
+    r = session.get(f"{base_url}/api/conversations", headers=_hdr(state["recruiter_token"]))
+    assert r.status_code == 200
+    target = next((c for c in r.json()["conversations"] if c["conversation_id"] == state["conv_id"]), None)
+    assert target is not None
+    assert "unread" in target
+    assert isinstance(target["unread"], int)
+    assert target["unread"] >= 2, f"Expected unread>=2, got {target['unread']}"
+
+
+def test_get_messages_marks_conversation_as_read(base_url, session):
+    # Recruiter reads the conversation -> their unread should go to 0
+    r = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "messages" in body and "has_more" in body and "other" in body
+    # Now list conversations for recruiter -> unread should be 0
+    r2 = session.get(f"{base_url}/api/conversations", headers=_hdr(state["recruiter_token"]))
+    target = next((c for c in r2.json()["conversations"] if c["conversation_id"] == state["conv_id"]), None)
+    assert target is not None
+    assert target["unread"] == 0
+    # Recruiter presence refreshed by GET messages -> player sees recruiter online
+    r3 = session.get(f"{base_url}/api/conversations", headers=_hdr(state["player_token"]))
+    tgt = next((c for c in r3.json()["conversations"] if c["conversation_id"] == state["conv_id"]), None)
+    assert tgt is not None and tgt["other"]["online"] is True
+
+
+def test_read_receipts_other_last_read(base_url, session):
+    # Recruiter just read (previous test). Player fetches messages -> other_last_read
+    # should be set (recruiter's read timestamp).
+    r = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "other_last_read" in body
+    assert body["other_last_read"] is not None, "Recruiter has read; player should see other_last_read"
+    # Should be parseable ISO
+    from datetime import datetime
+    dt = datetime.fromisoformat(body["other_last_read"])
+    assert dt is not None
+
+
+def test_pagination_limit_and_has_more(base_url, session):
+    # Add several messages to guarantee > limit
+    for i in range(6):
+        session.post(
+            f"{base_url}/api/conversations/{state['conv_id']}/messages",
+            json={"text": f"pag-{i}-{uuid.uuid4().hex[:4]}"},
+            headers=_hdr(state["player_token"]),
+        )
+    # Fetch latest 3
+    r = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages?limit=3",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["messages"]) == 3
+    assert body["has_more"] is True
+    # Messages must be in ascending chronological order
+    created = [m["created_at"] for m in body["messages"]]
+    assert created == sorted(created)
+    state["latest_first_created_at"] = body["messages"][0]["created_at"]
+    state["latest_last_created_at"] = body["messages"][-1]["created_at"]
+
+
+def test_pagination_before_returns_older(base_url, session):
+    before_ts = state["latest_first_created_at"]
+    r = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages"
+        f"?before={before_ts}&limit=5",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["messages"]) >= 1
+    # All returned must be strictly before the timestamp
+    for m in body["messages"]:
+        assert m["created_at"] < before_ts
+    # Chronological ascending
+    created = [m["created_at"] for m in body["messages"]]
+    assert created == sorted(created)
+    assert isinstance(body["has_more"], bool)
+
+
+def test_pagination_after_returns_only_new_messages(base_url, session):
+    # Use a wall-clock timestamp as the boundary: nothing should be created "in
+    # the future" between our tests.
+    from datetime import datetime, timezone
+    after_ts = datetime.now(timezone.utc).isoformat()
+    r = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages?after={after_ts}",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 200
+    assert r.json()["messages"] == [], f"Expected no messages after {after_ts}, got {r.json()['messages']}"
+
+    # Now send a new message (with image) as recruiter and poll with the same after_ts
+    r_send = session.post(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        json={"image": TINY_PNG_DATA_URI, "text": "polled-new"},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r_send.status_code == 200
+    time.sleep(0.05)
+    r2 = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages?after={after_ts}",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r2.status_code == 200
+    new_msgs = r2.json()["messages"]
+    assert len(new_msgs) >= 1
+    # Every returned message must be strictly after the timestamp (no resend of old messages/images)
+    for m in new_msgs:
+        assert m["created_at"] > after_ts
+    # The image we just sent should be present (polling should include images posted after)
+    assert any(m.get("image") == TINY_PNG_DATA_URI and m.get("text") == "polled-new" for m in new_msgs)
+
+    # Now send a new message from recruiter (contains image) and poll with after
+    r_send = session.post(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        json={"image": TINY_PNG_DATA_URI, "text": "polled-new"},
+        headers=_hdr(state["recruiter_token"]),
+    )
+    assert r_send.status_code == 200
+    time.sleep(0.05)
+    r2 = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages?after={after_ts}",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r2.status_code == 200
+    new_msgs = r2.json()["messages"]
+    assert len(new_msgs) >= 1
+    # Every returned message must be strictly after the timestamp (no resend of old image)
+    for m in new_msgs:
+        assert m["created_at"] > after_ts
+    # The image we just sent should be present in the new batch (polling should include images posted after)
+    assert any(m.get("image") == TINY_PNG_DATA_URI and m.get("text") == "polled-new" for m in new_msgs)
+
+
+def test_get_messages_non_participant_404(base_url, session):
+    email = f"TEST_np_{uuid.uuid4().hex[:6]}@t.com"
+    reg = session.post(f"{base_url}/api/auth/register", json={
+        "email": email, "password": "pass1234", "name": "NP", "role": "player"
+    })
+    tok = reg.json()["token"]
+    r = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages",
+        headers=_hdr(tok),
+    )
+    assert r.status_code == 404
+
+
+def test_get_messages_unknown_conversation_404(base_url, session):
+    r = session.get(
+        f"{base_url}/api/conversations/conv_doesnotexist/messages",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 404
+
+
+def test_get_messages_response_shape(base_url, session):
+    r = session.get(
+        f"{base_url}/api/conversations/{state['conv_id']}/messages?limit=5",
+        headers=_hdr(state["player_token"]),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    # Response shape as documented
+    for key in ("messages", "other", "other_last_read", "has_more"):
+        assert key in body, f"Missing key {key}"
+    other = body["other"]
+    assert other is not None
+    for key in ("user_id", "name", "role", "last_seen", "online"):
+        assert key in other, f"'other' missing key {key}"
+    assert isinstance(other["online"], bool)
+
+
 # ---------- Logout ----------
 def test_logout_invalidates_session(base_url, session):
     # Use the outsider approach: create dedicated user, login, logout, then me must 401
