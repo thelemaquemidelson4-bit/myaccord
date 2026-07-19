@@ -34,7 +34,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.surface }}>
       <KeyboardProvider>
         <AuthProvider>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <View style={{ flex: 1, backgroundColor: colors.surface }}>
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }} />
           </View>

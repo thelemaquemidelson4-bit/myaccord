@@ -52,11 +52,11 @@ export default function AthleteDetail() {
           <LinearGradient colors={["rgba(15,17,21,0.5)", "transparent", "rgba(15,17,21,0.95)"]} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />
           <View style={[styles.heroTop, { paddingTop: insets.top + spacing.sm }]}>
             <Pressable testID="athlete-back" onPress={() => router.back()} style={styles.iconBtn}>
-              <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
+              <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
             </Pressable>
           </View>
           <View style={styles.heroBottom}>
-            <AppText variant="display" style={{ fontSize: font["4xl"] }} numberOfLines={1}>{athlete.name}</AppText>
+            <AppText variant="display" color="#FFFFFF" style={{ fontSize: font["4xl"] }} numberOfLines={1}>{athlete.name}</AppText>
             <View style={styles.tagRow}>
               {athlete.sport && <Badge text={athlete.sport} color={colors.brandPrimary} textColor={colors.onBrandPrimary} />}
               {athlete.position && <Badge text={athlete.position} />}

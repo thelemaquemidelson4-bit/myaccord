@@ -83,8 +83,8 @@ function RoleCard({ title, subtitle, image, selected, onPress, height, testID }:
         </View>
       )}
       <View style={styles.cardContent}>
-        <AppText variant="display" style={{ fontSize: font["3xl"] }}>{title}</AppText>
-        <AppText variant="body" color={colors.onSurfaceSecondary} style={{ marginTop: spacing.xs }}>
+        <AppText variant="display" color="#FFFFFF" style={{ fontSize: font["3xl"] }}>{title}</AppText>
+        <AppText variant="body" color="rgba(255,255,255,0.85)" style={{ marginTop: spacing.xs }}>
           {subtitle}
         </AppText>
       </View>
@@ -122,6 +122,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     borderTopWidth: 1,
+    borderTopColor: colors.divider,
     backgroundColor: colors.surface,
   },
 });

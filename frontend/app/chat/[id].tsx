@@ -83,7 +83,7 @@ export default function Chat() {
               return (
                 <View style={[styles.bubbleRow, mine ? styles.rowRight : styles.rowLeft]}>
                   <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
-                    <AppText variant="body" color={mine ? colors.onSurface : colors.onBrandTertiary}>{item.text}</AppText>
+                    <AppText variant="body" color={mine ? colors.onBrandPrimary : colors.onSurface}>{item.text}</AppText>
                   </View>
                 </View>
               );
@@ -124,8 +124,8 @@ const styles = StyleSheet.create({
   rowRight: { justifyContent: "flex-end" },
   rowLeft: { justifyContent: "flex-start" },
   bubble: { maxWidth: "78%", paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.md },
-  bubbleMine: { backgroundColor: colors.surfaceTertiary, borderBottomRightRadius: 4 },
-  bubbleOther: { backgroundColor: colors.brandTertiary, borderBottomLeftRadius: 4 },
+  bubbleMine: { backgroundColor: colors.brandPrimary, borderBottomRightRadius: 4 },
+  bubbleOther: { backgroundColor: colors.cardSolid, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: colors.border },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",

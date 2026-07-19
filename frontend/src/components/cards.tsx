@@ -36,12 +36,12 @@ export function AthleteCard({ athlete, onPress }: { athlete: User & { ai_reason?
         {athlete.ai_reason && (
           <View style={styles.aiReason}>
             <Ionicons name="sparkles" size={12} color={colors.warning} />
-            <AppText variant="caption" color={colors.onSurfaceSecondary} style={{ marginLeft: 6, flex: 1 }} numberOfLines={2}>
+            <AppText variant="caption" color="rgba(255,255,255,0.9)" style={{ marginLeft: 6, flex: 1 }} numberOfLines={2}>
               {athlete.ai_reason}
             </AppText>
           </View>
         )}
-        <AppText variant="display" style={{ fontSize: font["3xl"] }} numberOfLines={1}>
+        <AppText variant="display" color="#FFFFFF" style={{ fontSize: font["3xl"] }} numberOfLines={1}>
           {athlete.name}
         </AppText>
         <View style={styles.metaRow}>

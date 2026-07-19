@@ -57,8 +57,8 @@ export default function Profile() {
           {hero ? (
             <Image source={{ uri: hero }} style={StyleSheet.absoluteFill} contentFit="cover" />
           ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }]}>
-              <AppText variant="display" color={colors.onSurfaceTertiary} style={{ fontSize: 48 }}>
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceInverse, alignItems: "center", justifyContent: "center" }]}>
+              <AppText variant="display" color="rgba(255,255,255,0.55)" style={{ fontSize: 48 }}>
                 {(user.club_name || user.name || "?").slice(0, 3).toUpperCase()}
               </AppText>
             </View>
@@ -66,11 +66,11 @@ export default function Profile() {
           <LinearGradient colors={["rgba(15,17,21,0.3)", "transparent", "rgba(15,17,21,0.95)"]} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />
           <View style={[styles.heroTop, { paddingTop: insets.top + spacing.sm }]}>
             <Pressable testID="logout-btn" onPress={logout} style={styles.iconBtn}>
-              <Ionicons name="log-out-outline" size={20} color={colors.onSurface} />
+              <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
             </Pressable>
           </View>
           <View style={styles.heroBottom}>
-            <AppText variant="display" style={{ fontSize: font["4xl"] }} numberOfLines={1}>
+            <AppText variant="display" color="#FFFFFF" style={{ fontSize: font["4xl"] }} numberOfLines={1}>
               {isRecruiter ? (user.club_name || user.name) : user.name}
             </AppText>
             <View style={styles.tagRow}>
