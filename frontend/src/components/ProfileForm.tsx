@@ -104,7 +104,6 @@ export function ProfileForm({
           value={bio}
           onChangeText={setBio}
           multiline
-          style={{ height: 100, textAlignVertical: "top", paddingTop: spacing.md }}
           testID="pf-bio"
         />
 

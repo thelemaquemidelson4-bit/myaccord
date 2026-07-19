@@ -107,7 +107,7 @@ export function Button({ title, variant = "primary", loading, icon, full, style,
 
 type InputProps = TextInputProps & { label?: string; icon?: keyof typeof Ionicons.glyphMap };
 
-export function Input({ label, icon, style, ...rest }: InputProps) {
+export function Input({ label, icon, style, multiline, ...rest }: InputProps) {
   return (
     <View style={{ marginBottom: spacing.lg }}>
       {label && (
@@ -115,11 +115,12 @@ export function Input({ label, icon, style, ...rest }: InputProps) {
           {label}
         </AppText>
       )}
-      <View style={styles.inputWrap}>
+      <View style={[styles.inputWrap, multiline && styles.inputWrapMultiline]}>
         {icon && <Ionicons name={icon} size={18} color={colors.onSurfaceTertiary} style={{ marginRight: spacing.sm }} />}
         <TextInput
           placeholderTextColor={colors.info}
-          style={[styles.input, style]}
+          multiline={multiline}
+          style={[styles.input, multiline && styles.inputMultiline, style]}
           {...rest}
         />
       </View>
@@ -266,6 +267,8 @@ const styles = StyleSheet.create({
     height: 52,
   },
   input: { flex: 1, color: colors.onSurface, fontFamily: fonts.body, fontSize: font.lg },
+  inputWrapMultiline: { height: undefined, minHeight: 110, alignItems: "flex-start", paddingVertical: spacing.md },
+  inputMultiline: { textAlignVertical: "top", height: "100%" },
   avatar: {
     backgroundColor: colors.surfaceTertiary,
     alignItems: "center",

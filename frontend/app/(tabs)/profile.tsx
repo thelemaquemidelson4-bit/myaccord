@@ -65,7 +65,7 @@ export default function Profile() {
           )}
           <LinearGradient colors={["rgba(15,17,21,0.3)", "transparent", "rgba(15,17,21,0.95)"]} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />
           <View style={[styles.heroTop, { paddingTop: insets.top + spacing.sm }]}>
-            <Pressable testID="settings-btn" onPress={logout} style={styles.iconBtn}>
+            <Pressable testID="logout-btn" onPress={logout} style={styles.iconBtn}>
               <Ionicons name="log-out-outline" size={20} color={colors.onSurface} />
             </Pressable>
           </View>

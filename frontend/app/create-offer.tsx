@@ -68,7 +68,6 @@ export default function CreateOffer() {
           value={description}
           onChangeText={setDescription}
           multiline
-          style={{ height: 120, textAlignVertical: "top", paddingTop: spacing.md }}
           testID="offer-description"
         />
         {error && <AppText variant="caption" color={colors.error} testID="offer-error">{error}</AppText>}

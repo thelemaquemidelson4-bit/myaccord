@@ -65,7 +65,7 @@ export default function Home() {
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerTop}>
           <View style={{ flex: 1 }}>
-            <AppText variant="caption" color={colors.onSurfaceTertiary}>
+            <AppText variant="caption" color={colors.onSurfaceTertiary} numberOfLines={1}>
               {isRecruiter ? "Découvrez des talents" : "Offres pour vous"}
             </AppText>
             <AppText variant="display" style={{ fontSize: 28 }}>

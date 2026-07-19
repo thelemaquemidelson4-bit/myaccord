@@ -32,12 +32,14 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.surface }}>
-      <AuthProvider>
-        <StatusBar style="light" />
-        <View style={{ flex: 1, backgroundColor: colors.surface }}>
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }} />
-        </View>
-      </AuthProvider>
+      <KeyboardProvider>
+        <AuthProvider>
+          <StatusBar style="light" />
+          <View style={{ flex: 1, backgroundColor: colors.surface }}>
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }} />
+          </View>
+        </AuthProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }
