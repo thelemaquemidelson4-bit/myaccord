@@ -519,7 +519,7 @@ async def get_messages(
     conversation_id: str,
     after: Optional[str] = Query(None),
     before: Optional[str] = Query(None),
-    limit: int = Query(30),
+    limit: int = Query(30, ge=1, le=100),
     user: Dict[str, Any] = Depends(get_current_user),
 ):
     conv = await db.conversations.find_one({"conversation_id": conversation_id}, {"_id": 0})
