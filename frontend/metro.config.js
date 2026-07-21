@@ -22,4 +22,20 @@ config.cacheStores = [
 // Reduce the number of workers to decrease resource usage
 config.maxWorkers = 2;
 
+// react-native-webrtc deep-imports "event-target-shim/index", but event-target-shim@6
+// only exposes "." via its package "exports" field. Metro's package-exports resolution
+// (enabled by default on SDK 54) rejects the deep path and fails native bundling/export.
+// Alias the deep import to the package root, which resolves to index.js.
+const RESOLVER_ALIASES = {
+  "event-target-shim/index": "event-target-shim",
+};
+const defaultResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const target = RESOLVER_ALIASES[moduleName] ?? moduleName;
+  if (defaultResolveRequest) {
+    return defaultResolveRequest(context, target, platform);
+  }
+  return context.resolveRequest(context, target, platform);
+};
+
 module.exports = config;

@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 5 — regression check after metro.config.js resolver alias (event-target-shim/index -> event-target-shim) and @config-plugins/react-native-webrtc 13.0.0 downgrade + WebRTC Live/Calls features. Backend: 84/84 pytest pass (100%). All 69 iter1-4 regression tests still green (auth, offers CRUD, applications+status, messages text/image/pagination/read-receipts/presence, AI). Added /app/backend/tests/test_webrtc_lives_calls.py with 15 tests covering the new endpoints: POST /api/lives/start (video+audio, default title), GET /api/lives (viewers count, only 'live' status listed), GET /api/lives/{id} (404), POST /api/lives/{id}/end (host-only 403/404, ended removes from list), POST /api/calls/start (video+audio, posts call-invite message with populated `call` field into the conversation, updates last_message preview to '📞 Appel vidéo/audio', 404 for unknown conv and 404 for non-participant), and GET messages regression that guarantees every message exposes a `call` key. Frontend: Expo web preview bundles and boots successfully — metro resolver alias did NOT break the web build (react-native-webrtc code paths are gated behind `webrtcAvailable` in /app/frontend/src/webrtc/rtc.web.ts). Verified end-to-end via Playwright at https://athlete-jobs.preview.emergentagent.com: (1) login leo@test.com works via /auth (default mode = signup, must click 'toggle-mode' to switch to login — non-blocking design note); (2) player home shows the 'Myaccord' wordmark top-left in brandPrimary + 'OFFRES' feed loads real offers; (3) recruiter home shows 'Myaccord' + 'TALENTS' + IA suggestion button + athlete cards; (4) new Direct tab is visible in bottom nav (5 tabs), 'DIRECTS' header renders, live created by API is listed with LIVE badge + host name + '0 spectateur'; (5) FAB 'En direct' opens the 'Passer en direct' bottom-sheet modal with title-input + Vidéo/Audio toggle + 'Démarrer le direct' confirm button (all testIDs present); (6) chat header renders both audio+video call buttons (testIDs chat-call-audio / chat-call-video); (7) tapping video call button issues POST /api/calls/start and pushes /call/[roomId] with the graceful 'Appels non disponibles ici' fallback screen — no crash; (8) call-invite message rendered as a card with 'Appel vidéo — Appel entrant — Rejoindre' button (testID join-call-*); (9) direct navigation to /live/[roomId] shows the graceful 'Direct non disponible ici' fallback. React-native-web deprecation warnings ('shadow*' style props are deprecated. Use \"boxShadow\") appear repeatedly in the console — carry-over from prior iterations, non-blocking. All 8 review-request bullet points verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/lives", "issue": "viewers count reflects only the WebSocket signal-room live occupants (SIGNAL_ROOMS.get(room_id).clients). It stays at 0 for a freshly-created live until at least one WebRTC signaling client joins the room. Expected behavior, but worth documenting: /api/lives is not a persistent viewer counter."},
+      {"endpoint": "POST /api/calls/start", "issue": "No validation that the target participant is available/online. Server always posts the call-invite message even if the other party is offline. Consider surfacing a warning or a lightweight 'ringing' timeout. Not a bug per se."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/auth", "issues": ["The auth screen defaults to signup mode ('Créer un compte'); users returning to login must tap 'Déjà un compte ? Se connecter' — this is expected UX but the 'toggle-mode' testID is essential and confirmed present."]}
+    ],
+    "react_native_issues": [
+      {"component": "shadow* style props (multiple screens)", "issue": "Console shows repeated '\"shadow*\" style props are deprecated. Use \"boxShadow\".' warnings on react-native-web. Non-blocking but should be migrated. References: /app/frontend/app/(tabs)/index.tsx:176-179 (fab), /app/frontend/app/(tabs)/live.tsx:149 (fab), and other Pressable shadow*. Same finding as prior iterations — still not fixed."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scoutmoi_api.py",
+    "/app/backend/tests/test_webrtc_lives_calls.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking — metro resolver alias and @config-plugins/react-native-webrtc 13.0.0 downgrade are safe: web bundle boots without red screen, all backend endpoints (including new /api/lives + /api/calls) pass, and the web fallback screens for /call and /live render without crashing.",
+    "(Carry-over, non-blocking) Migrate remaining 'shadow*' style props to 'boxShadow' across FABs and cards to silence react-native-web deprecation warnings.",
+    "(Carry-over) Consider splitting server.py (now 945 lines, over the 700-line soft threshold) into auth/offers/applications/chat/live/ai modules. Iteration 5 added the /lives, /calls, /ws/signal blocks."
+  ],
+  "critical_code_review_comments": [
+    "metro.config.js resolver alias is minimal and safe — it only rewrites the literal 'event-target-shim/index' module id, delegating all other resolutions to the default resolver. No impact on unrelated modules.",
+    "webrtcAvailable guard in /app/frontend/src/webrtc/rtc.web.ts (referenced by /app/frontend/app/call/[roomId].tsx:131 and /app/frontend/app/live/[roomId].tsx:141) correctly short-circuits to the fallback screen on web BEFORE any getUserMedia/RTCPeerConnection call, preventing runtime red-screen on Expo web.",
+    "Backend WebSocket /api/ws/signal/{room_id} uses session-token query-param auth via authenticate_ws_token — good; also correctly closes with 4401 on unauthenticated attempts.",
+    "post_message_internal correctly serializes the `call` payload into the message doc, exposes it via GET /messages, and drives the '📞 Appel …' preview in the conversations list.",
+    "list_lives filters to status='live' and augments each item with viewers = max(0, len(clients)-1) (excludes host). Correct.",
+    "server.py now 945 lines. Consider modularizing (was 779 at iter4).",
+    "No MongoDB _id leaks in any of the new /lives or /calls responses (`{'_id': 0}` projection consistently applied)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_webrtc_lives_calls.py (new — 15 tests, 2 classes TestLives + TestCalls, module-scoped ctx fixture builds its own player+recruiter+offer+application+conversation so ordering with test_scoutmoi_api.py is independent)"
+  ],
+  "success_rate": {"backend": "100% (84/84)", "frontend": "100% of review-request checks verified via Playwright (home wordmark, Direct tab list + modal, chat call header buttons, call-invite Rejoindre card, /call and /live web fallbacks)"},
+  "seed_data_creation": "test_webrtc_lives_calls.py creates its own ephemeral users (TEST_iter5_p_*, TEST_iter5_r_*, TEST_iter5_out_*), one offer, one application, one conversation, and two lives (video + audio). Independent from the main regression state so it can run in any order. Both lives end up with status='live' initially; the video live is explicitly ended by the host as part of the test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression suite: /app/backend/tests/ has 2 test files — test_scoutmoi_api.py (69 tests, ORDER-SENSITIVE, share a module-level `state` dict, ends by DELETE-ing the seeded offer) and test_webrtc_lives_calls.py (15 tests, INDEPENDENT via module-scoped ctx fixture). Run: `EXPO_PUBLIC_BACKEND_URL=https://athlete-jobs.preview.emergentagent.com pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml`. New endpoints tested this iter: POST /api/lives/start, GET /api/lives, GET /api/lives/{id}, POST /api/lives/{id}/end, POST /api/calls/start. WebRTC media itself CANNOT be tested on web/Expo Go by design — only the graceful fallback (/call/[id] + /live/[id] show 'non disponible ici' screens). Frontend auth: default /auth screen opens in signup mode; to login, click testID='toggle-mode' first, then fill email-input/password-input, then submit-btn. Seed accounts leo@test.com and coach@test.com work (both pass1234).",
+  "rca_of_issue": "N/A — no functional bugs found. The metro.config.js resolver alias for 'event-target-shim/index' + config-plugin downgrade to 13.0.0 do NOT introduce any regression: (a) Expo web bundle boots and renders the Myaccord landing/onboarding/auth/home/direct/chat/messages screens correctly; (b) all 84 backend tests pass (69 regression + 15 new); (c) new WebRTC screens gracefully fall back on web via the webrtcAvailable=false path in rtc.web.ts. Ready for native iOS/Android build to exercise actual audio/video streams."
+}
