@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { View, StyleSheet, FlatList, Pressable, RefreshControl, ActivityIndicator } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
@@ -63,6 +64,21 @@ export default function Home() {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        <View style={styles.brandBar}>
+          <Image
+            source={require("../../assets/images/myaccord-logo.png")}
+            style={styles.brandLogo}
+            contentFit="contain"
+          />
+          {isRecruiter && (
+            <Pressable testID="ai-suggest-btn" onPress={aiMode ? () => { setAiMode(false); load(); } : runAi} style={[styles.aiBtn, aiMode && styles.aiBtnActive]}>
+              <Ionicons name="sparkles" size={16} color={aiMode ? colors.onBrandPrimary : colors.warning} />
+              <AppText variant="caption" weight="semibold" color={aiMode ? colors.onBrandPrimary : colors.onSurface} style={{ marginLeft: 5 }}>
+                IA
+              </AppText>
+            </Pressable>
+          )}
+        </View>
         <View style={styles.headerTop}>
           <View style={{ flex: 1 }}>
             <AppText variant="caption" color={colors.onSurfaceTertiary} numberOfLines={1}>
@@ -72,14 +88,6 @@ export default function Home() {
               {isRecruiter ? "TALENTS" : "OFFRES"}
             </AppText>
           </View>
-          {isRecruiter && (
-            <Pressable testID="ai-suggest-btn" onPress={aiMode ? () => { setAiMode(false); load(); } : runAi} style={[styles.aiBtn, aiMode && styles.aiBtnActive]}>
-              <Ionicons name="sparkles" size={16} color={aiMode ? colors.onBrandPrimary : colors.warning} />
-              <AppText variant="caption" weight="semibold" color={aiMode ? colors.onBrandPrimary : colors.onSurface} style={{ marginLeft: 5 }}>
-                IA
-              </AppText>
-            </Pressable>
-          )}
         </View>
         <ChipRow items={SPORTS} selected={sport} onSelect={(v) => { setSport(v); }} testIDPrefix="home-sport" />
       </View>
@@ -138,6 +146,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.sm,
   },
+  brandBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
+  },
+  brandLogo: { width: 132, height: 44 },
   aiBtn: {
     flexDirection: "row",
     alignItems: "center",
