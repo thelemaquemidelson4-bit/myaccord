@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from "react";
 import { View, StyleSheet, FlatList, Pressable, RefreshControl, ActivityIndicator } from "react-native";
-import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
@@ -65,11 +64,9 @@ export default function Home() {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.brandBar}>
-          <Image
-            source={require("../../assets/images/myaccord-logo.png")}
-            style={styles.brandLogo}
-            contentFit="contain"
-          />
+          <AppText variant="display" color={colors.brandPrimary} style={styles.brandName}>
+            Myaccord
+          </AppText>
           {isRecruiter && (
             <Pressable testID="ai-suggest-btn" onPress={aiMode ? () => { setAiMode(false); load(); } : runAi} style={[styles.aiBtn, aiMode && styles.aiBtnActive]}>
               <Ionicons name="sparkles" size={16} color={aiMode ? colors.onBrandPrimary : colors.warning} />
@@ -154,6 +151,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   brandLogo: { width: 132, height: 44 },
+  brandName: { fontSize: 30, letterSpacing: 0.3 },
   aiBtn: {
     flexDirection: "row",
     alignItems: "center",
