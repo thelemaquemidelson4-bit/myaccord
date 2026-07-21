@@ -27,10 +27,12 @@ export default function Onboarding() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <AppText variant="display" style={styles.logo}>
-            my<AppText variant="display" color={colors.brandPrimary} style={styles.logo}>accord</AppText>
-          </AppText>
-          <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xs }}>
+          <Image
+            source={require("../assets/images/myaccord-logo.png")}
+            style={styles.logoImg}
+            contentFit="contain"
+          />
+          <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.sm }}>
             La plateforme de recrutement sportif
           </AppText>
         </View>

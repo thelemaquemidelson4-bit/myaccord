@@ -1,4 +1,4 @@
-// Intake design tokens — Light Blue & White (subtle transparency).
+// myaccord design tokens — Light Blue & White (subtle transparency).
 export const colors = {
   surface: "#EEF3FB",
   onSurface: "#0F2035",
