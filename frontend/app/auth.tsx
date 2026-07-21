@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     alignItems: "center", justifyContent: "center",
   },
-  logo: { width: 96, height: 88, marginTop: spacing.lg },
+  logo: { width: 120, height: 110, marginTop: spacing.lg, alignSelf: "center" },
   divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.lg },
   line: { flex: 1, height: 1, backgroundColor: colors.divider },
   footer: {

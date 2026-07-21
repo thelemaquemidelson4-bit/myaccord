@@ -13,7 +13,8 @@
       "bundleIdentifier": "com.emergent.athletejobs.mxkx1l",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Ajoutez une photo à votre profil sportif",
-        "NSCameraUsageDescription": "Prenez une photo à envoyer dans vos messages"
+        "NSCameraUsageDescription": "Filmez pendant vos appels et directs sportifs",
+        "NSMicrophoneUsageDescription": "Parlez pendant vos appels et directs sportifs"
       }
     },
     "android": {
@@ -22,7 +23,13 @@
         "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.athletejobs.mxkx1l"
+      "package": "com.emergent.athletejobs.mxkx1l",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -46,7 +53,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
         }
-      ]
+      ],
+      "@config-plugins/react-native-webrtc"
     ],
     "experiments": {
       "typedRoutes": true

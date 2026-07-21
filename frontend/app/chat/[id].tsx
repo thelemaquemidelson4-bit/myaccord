@@ -113,6 +113,13 @@ export default function Chat() {
     } catch {}
   };
 
+  const startCall = async (media: "video" | "audio") => {
+    try {
+      const data = await api.post("/calls/start", { conversation_id: id, media });
+      router.push(`/call/${data.room_id}?initiator=1&media=${data.media}&name=${encodeURIComponent(title)}`);
+    } catch {}
+  };
+
   const pickFromGallery = async () => {
     setAttachOpen(false);
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -164,7 +171,14 @@ export default function Chat() {
             )}
           </View>
         </Pressable>
-        <View style={{ width: 40 }} />
+        <View style={styles.callBtns}>
+          <Pressable testID="chat-call-audio" onPress={() => startCall("audio")} style={styles.iconBtn}>
+            <Ionicons name="call" size={19} color={colors.brandPrimary} />
+          </Pressable>
+          <Pressable testID="chat-call-video" onPress={() => startCall("video")} style={styles.iconBtn}>
+            <Ionicons name="videocam" size={20} color={colors.brandPrimary} />
+          </Pressable>
+        </View>
       </View>
 
       <KeyboardAvoidingView behavior="translate-with-padding" keyboardVerticalOffset={0} style={{ flex: 1 }}>
@@ -192,6 +206,30 @@ export default function Chat() {
             renderItem={({ item }) => {
               const mine = item.sender_id === user?.user_id;
               const isLastMine = mine && lastMine && item.message_id === lastMine.message_id;
+              if (item.call) {
+                return (
+                  <View style={[styles.bubbleRow, mine ? styles.rowRight : styles.rowLeft]}>
+                    <View style={styles.callCard}>
+                      <View style={styles.callIcon}>
+                        <Ionicons name={item.call.media === "video" ? "videocam" : "call"} size={20} color={colors.onBrandPrimary} />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: spacing.md }}>
+                        <AppText variant="label">{item.call.media === "video" ? "Appel vidéo" : "Appel audio"}</AppText>
+                        <AppText variant="caption">{mine ? "Appel lancé" : "Appel entrant"}</AppText>
+                      </View>
+                      {!mine && (
+                        <Pressable
+                          testID={`join-call-${item.message_id}`}
+                          onPress={() => router.push(`/call/${item.call.room_id}?initiator=0&media=${item.call.media}&name=${encodeURIComponent(title)}`)}
+                          style={styles.joinBtn}
+                        >
+                          <AppText variant="caption" weight="bold" color={colors.onBrandPrimary}>Rejoindre</AppText>
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                );
+              }
               return (
                 <View>
                   <View style={[styles.bubbleRow, mine ? styles.rowRight : styles.rowLeft]}>
@@ -273,6 +311,10 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", flex: 1, paddingHorizontal: spacing.sm },
   onlineDot: { position: "absolute", right: 0, bottom: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.success, borderWidth: 2, borderColor: colors.surface },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
+  callBtns: { flexDirection: "row", gap: spacing.sm },
+  callCard: { flexDirection: "row", alignItems: "center", maxWidth: "82%", backgroundColor: colors.cardSolid, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginVertical: 2 },
+  callIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  joinBtn: { backgroundColor: colors.success, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, marginLeft: spacing.md },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   loadOlder: { alignItems: "center", paddingVertical: spacing.md, marginBottom: spacing.sm },
   bubbleRow: { marginBottom: 2, flexDirection: "row" },

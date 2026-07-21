@@ -42,6 +42,15 @@ export const api = {
   del: <T = any>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
+export async function getToken(): Promise<string> {
+  return storage.secureGet<string>(TOKEN_KEY, "");
+}
+
+export function wsUrl(path: string, token: string): string {
+  const base = (BASE || "").replace(/^http/, "ws");
+  return `${base}/api${path}?token=${encodeURIComponent(token)}`;
+}
+
 export type User = {
   user_id: string;
   email: string;

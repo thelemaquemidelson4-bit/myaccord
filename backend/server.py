@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Query, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -186,6 +186,16 @@ class ConversationInput(BaseModel):
 class MessageInput(BaseModel):
     text: Optional[str] = None
     image: Optional[str] = None
+
+
+class CallStartInput(BaseModel):
+    conversation_id: str
+    media: str = "video"  # "video" | "audio"
+
+
+class LiveStartInput(BaseModel):
+    title: Optional[str] = None
+    media: str = "video"
 
 
 class AISummaryInput(BaseModel):
@@ -513,17 +523,21 @@ async def update_application_status(application_id: str, inp: ApplicationStatusI
 
 
 # ----------------------------- Messaging -----------------------------
-async def post_message_internal(conversation_id: str, sender_id: str, text: Optional[str] = None, image: Optional[str] = None) -> Dict[str, Any]:
+async def post_message_internal(conversation_id: str, sender_id: str, text: Optional[str] = None, image: Optional[str] = None, call: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     msg = {
         "message_id": new_id("msg"),
         "conversation_id": conversation_id,
         "sender_id": sender_id,
         "text": text,
         "image": image,
+        "call": call,
         "created_at": now_utc().isoformat(),
     }
     await db.messages.insert_one(dict(msg))
-    preview = "📷 Photo" if image and not text else (text or "")
+    if call:
+        preview = "📞 Appel vidéo" if call.get("media") == "video" else "📞 Appel audio"
+    else:
+        preview = "📷 Photo" if image and not text else (text or "")
     await db.conversations.update_one(
         {"conversation_id": conversation_id},
         {"$set": {"last_message": preview, "last_at": now_utc().isoformat()}},
@@ -642,6 +656,157 @@ async def send_message_route(conversation_id: str, inp: MessageInput, user: Dict
     msg = await post_message_internal(conversation_id, user["user_id"], inp.text, inp.image)
     msg.pop("_id", None)
     return {"message": msg}
+
+
+# ----------------------------- Live Calls & Broadcast -----------------------------
+@api_router.post("/calls/start")
+async def start_call(inp: CallStartInput, user: Dict[str, Any] = Depends(get_current_user)):
+    conv = await db.conversations.find_one({"conversation_id": inp.conversation_id}, {"_id": 0})
+    if not conv or user["user_id"] not in conv["participants"]:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    media = "audio" if inp.media == "audio" else "video"
+    room_id = new_id("call")
+    call = {
+        "room_id": room_id,
+        "media": media,
+        "caller_id": user["user_id"],
+        "caller_name": user.get("name"),
+        "status": "ringing",
+    }
+    label = "Appel vidéo" if media == "video" else "Appel audio"
+    await post_message_internal(inp.conversation_id, user["user_id"], text=f"📞 {label}", call=call)
+    await touch_presence(user["user_id"])
+    return {"room_id": room_id, "media": media}
+
+
+@api_router.post("/lives/start")
+async def start_live(inp: LiveStartInput, user: Dict[str, Any] = Depends(get_current_user)):
+    live_id = new_id("live")
+    doc = {
+        "live_id": live_id,
+        "room_id": live_id,
+        "host_id": user["user_id"],
+        "host_name": user.get("name"),
+        "host_photo": user.get("photo"),
+        "host_role": user.get("role"),
+        "title": (inp.title or "").strip() or f"Direct de {user.get('name')}",
+        "media": "audio" if inp.media == "audio" else "video",
+        "status": "live",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.lives.insert_one(dict(doc))
+    doc.pop("_id", None)
+    await touch_presence(user["user_id"])
+    return {"live": doc}
+
+
+@api_router.get("/lives")
+async def list_lives(user: Dict[str, Any] = Depends(get_current_user)):
+    lives = await db.lives.find({"status": "live"}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for lv in lives:
+        room = SIGNAL_ROOMS.get(lv["room_id"])
+        viewers = 0
+        if room:
+            viewers = max(0, len(room.clients) - 1)
+        lv["viewers"] = viewers
+    return {"lives": lives}
+
+
+@api_router.get("/lives/{live_id}")
+async def get_live(live_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    lv = await db.lives.find_one({"live_id": live_id}, {"_id": 0})
+    if not lv:
+        raise HTTPException(status_code=404, detail="Direct introuvable")
+    return {"live": lv}
+
+
+@api_router.post("/lives/{live_id}/end")
+async def end_live(live_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    lv = await db.lives.find_one({"live_id": live_id}, {"_id": 0})
+    if not lv:
+        raise HTTPException(status_code=404, detail="Direct introuvable")
+    if lv["host_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Action non autorisée")
+    await db.lives.update_one({"live_id": live_id}, {"$set": {"status": "ended", "ended_at": now_utc().isoformat()}})
+    return {"ok": True}
+
+
+# --- WebSocket signaling (used by 1:1 calls and live broadcast, mesh topology) ---
+class SignalRoom:
+    def __init__(self, room_id: str):
+        self.room_id = room_id
+        self.clients: Dict[WebSocket, Dict[str, Any]] = {}
+
+    async def send_to(self, target_user_id: str, message: Dict[str, Any]):
+        for ws, info in list(self.clients.items()):
+            if info["user_id"] == target_user_id:
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    pass
+
+    async def broadcast(self, message: Dict[str, Any], exclude: Optional[WebSocket] = None):
+        for ws in list(self.clients.keys()):
+            if ws is not exclude:
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    pass
+
+
+SIGNAL_ROOMS: Dict[str, SignalRoom] = {}
+
+
+async def authenticate_ws_token(token: str) -> Optional[Dict[str, Any]]:
+    if not token:
+        return None
+    session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    if not session:
+        return None
+    user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0, "password": 0})
+    return user
+
+
+@app.websocket("/api/ws/signal/{room_id}")
+async def ws_signal(websocket: WebSocket, room_id: str, token: str = Query("")):
+    user = await authenticate_ws_token(token)
+    if not user:
+        await websocket.close(code=4401)
+        return
+    await websocket.accept()
+    room = SIGNAL_ROOMS.setdefault(room_id, SignalRoom(room_id))
+    room.clients[websocket] = {"user_id": user["user_id"], "name": user.get("name")}
+
+    # Tell the newcomer who is already in the room.
+    peers = [
+        {"user_id": info["user_id"], "name": info["name"]}
+        for ws, info in room.clients.items() if ws is not websocket
+    ]
+    await websocket.send_json({"type": "peers", "self": user["user_id"], "peers": peers})
+    # Announce the newcomer to everyone else.
+    await room.broadcast(
+        {"type": "peer-joined", "user_id": user["user_id"], "name": user.get("name")},
+        exclude=websocket,
+    )
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            data["from"] = user["user_id"]
+            target = data.get("to")
+            if target:
+                await room.send_to(target, data)
+            else:
+                await room.broadcast(data, exclude=websocket)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"WS signal error: {e}")
+    finally:
+        room.clients.pop(websocket, None)
+        await room.broadcast({"type": "peer-left", "user_id": user["user_id"]}, exclude=websocket)
+        if not room.clients:
+            SIGNAL_ROOMS.pop(room_id, None)
 
 
 # ----------------------------- AI Routes -----------------------------

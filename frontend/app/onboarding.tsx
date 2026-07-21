@@ -32,7 +32,7 @@ export default function Onboarding() {
             style={styles.logoImg}
             contentFit="contain"
           />
-          <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.sm }}>
+          <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xs }}>
             La plateforme de recrutement sportif
           </AppText>
         </View>
@@ -96,8 +96,8 @@ function RoleCard({ title, subtitle, image, selected, onPress, height, testID }:
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  header: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl, alignItems: "flex-start" },
-  logo: { fontSize: 44, letterSpacing: 0.5 },
+  header: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl, alignItems: "center" },
+  logoImg: { width: 150, height: 137 },
   card: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
