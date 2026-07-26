@@ -27,11 +27,9 @@ export default function Onboarding() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Image
-            source={require("../assets/images/myaccord-logo.png")}
-            style={styles.logoImg}
-            contentFit="contain"
-          />
+          <AppText variant="display" color={colors.brandPrimary} style={styles.brandName}>
+            Myaccord
+          </AppText>
           <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xs }}>
             La plateforme de recrutement sportif
           </AppText>
@@ -97,7 +95,7 @@ function RoleCard({ title, subtitle, image, selected, onPress, height, testID }:
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   header: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl, alignItems: "center" },
-  logoImg: { width: 150, height: 137 },
+  brandName: { fontSize: 40, letterSpacing: 0.3 },
   card: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,

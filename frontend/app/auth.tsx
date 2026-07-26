@@ -4,7 +4,6 @@ import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboa
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { AppText, Button, Input } from "@/src/components/ui";
 import { useAuth } from "@/src/context/AuthContext";
 import { colors, spacing, radius, fonts, font } from "@/src/theme/theme";
@@ -71,11 +70,9 @@ export default function Auth() {
           <Ionicons name="chevron-back" size={24} color={colors.onSurface} />
         </Pressable>
 
-        <Image
-          source={require("../assets/images/myaccord-logo.png")}
-          style={styles.logo}
-          contentFit="contain"
-        />
+        <AppText variant="display" color={colors.brandPrimary} style={styles.brand}>
+          Myaccord
+        </AppText>
 
         <AppText variant="display" style={{ fontSize: 34, marginTop: spacing.lg }}>
           {mode === "register" ? "Créer un compte" : "Bon retour"}
@@ -172,7 +169,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     alignItems: "center", justifyContent: "center",
   },
-  logo: { width: 120, height: 110, marginTop: spacing.lg, alignSelf: "center" },
+  brand: { fontSize: 40, marginTop: spacing.lg, alignSelf: "flex-start" },
   divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.lg },
   line: { flex: 1, height: 1, backgroundColor: colors.divider },
   footer: {

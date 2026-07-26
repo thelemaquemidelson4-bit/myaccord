@@ -150,7 +150,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.xs,
   },
-  brandLogo: { width: 132, height: 44 },
   brandName: { fontSize: 30, letterSpacing: 0.3 },
   aiBtn: {
     flexDirection: "row",
