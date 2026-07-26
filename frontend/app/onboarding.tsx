@@ -1,71 +1,64 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Pressable, ScrollView, Dimensions } from "react-native";
+import { View, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, Button } from "@/src/components/ui";
-import { colors, spacing, radius, fonts, font } from "@/src/theme/theme";
-
-const { height } = Dimensions.get("window");
+import { colors, spacing, radius } from "@/src/theme/theme";
 
 const ATHLETE_BG = "https://images.pexels.com/photos/35005203/pexels-photo-35005203.jpeg";
 const RECRUITER_BG = "https://images.pexels.com/photos/32101180/pexels-photo-32101180.jpeg";
 const FAN_BG = "https://images.pexels.com/photos/2277981/pexels-photo-2277981.jpeg";
+
+const ROLES = [
+  { key: "player", title: "Athlète", subtitle: "Profil, stats et clubs.", image: ATHLETE_BG, icon: "walk", testID: "role-player" },
+  { key: "recruiter", title: "Recruteur", subtitle: "Talents et offres.", image: RECRUITER_BG, icon: "briefcase", testID: "role-recruiter" },
+  { key: "fan", title: "Supporter", subtitle: "Suivez et regardez les directs.", image: FAN_BG, icon: "heart", testID: "role-fan" },
+] as const;
 
 export default function Onboarding() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [role, setRole] = useState<"player" | "recruiter" | "fan" | null>(null);
 
-  const cardHeight = Math.max(170, (height - insets.top - insets.bottom - 220) / 3);
-
   return (
-    <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + spacing.lg, paddingBottom: spacing.lg }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <AppText variant="display" color={colors.brandPrimary} style={styles.brandName}>
-            Myaccord
-          </AppText>
-          <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xs }}>
-            La plateforme de recrutement sportif
-          </AppText>
-        </View>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
+      <View style={styles.header}>
+        <AppText variant="display" color={colors.brandPrimary} style={styles.brandName}>
+          Myaccord
+        </AppText>
+        <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: 2 }}>
+          La plateforme de recrutement sportif
+        </AppText>
+      </View>
 
-        <RoleCard
-          testID="role-player"
-          title="Je suis Athlète"
-          subtitle="Créez votre profil, montrez vos stats et trouvez un club."
-          image={ATHLETE_BG}
-          selected={role === "player"}
-          onPress={() => setRole("player")}
-          height={cardHeight}
-        />
-        <RoleCard
-          testID="role-recruiter"
-          title="Je suis Recruteur"
-          subtitle="Découvrez des talents et publiez vos offres."
-          image={RECRUITER_BG}
-          selected={role === "recruiter"}
-          onPress={() => setRole("recruiter")}
-          height={cardHeight}
-        />
-        <RoleCard
-          testID="role-fan"
-          title="Je suis Supporter"
-          subtitle="Suivez les talents, regardez les directs et échangez."
-          image={FAN_BG}
-          selected={role === "fan"}
-          onPress={() => setRole("fan")}
-          height={cardHeight}
-        />
-      </ScrollView>
+      <AppText variant="label" style={styles.pick}>Je suis…</AppText>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
+      <View style={styles.list}>
+        {ROLES.map((r) => {
+          const selected = role === r.key;
+          return (
+            <Pressable
+              key={r.key}
+              testID={r.testID}
+              onPress={() => setRole(r.key)}
+              style={[styles.row, selected && styles.rowSelected]}
+            >
+              <Image source={{ uri: r.image }} style={styles.thumb} contentFit="cover" />
+              <View style={styles.rowText}>
+                <AppText variant="displaySm" numberOfLines={1}>{r.title}</AppText>
+                <AppText variant="caption" numberOfLines={1}>{r.subtitle}</AppText>
+              </View>
+              <View style={[styles.radio, selected && styles.radioOn]}>
+                {selected && <Ionicons name="checkmark" size={16} color={colors.onBrandPrimary} />}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.footer}>
         <Button
           title="Continuer"
           full
@@ -78,61 +71,34 @@ export default function Onboarding() {
   );
 }
 
-function RoleCard({ title, subtitle, image, selected, onPress, height, testID }: any) {
-  return (
-    <Pressable testID={testID} onPress={onPress} style={[styles.card, { height }, selected && styles.cardSelected]}>
-      <Image source={{ uri: image }} style={StyleSheet.absoluteFill} contentFit="cover" />
-      <LinearGradient
-        colors={["transparent", "rgba(15,17,21,0.5)", "rgba(15,17,21,0.95)"]}
-        locations={[0, 0.4, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      {selected && (
-        <View style={styles.check}>
-          <Ionicons name="checkmark" size={18} color={colors.onBrandPrimary} />
-        </View>
-      )}
-      <View style={styles.cardContent}>
-        <AppText variant="display" color="#FFFFFF" style={{ fontSize: font["3xl"] }}>{title}</AppText>
-        <AppText variant="body" color="rgba(255,255,255,0.85)" style={{ marginTop: spacing.xs }}>
-          {subtitle}
-        </AppText>
-      </View>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.surface },
-  header: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl, alignItems: "center" },
-  brandName: { fontSize: 40, letterSpacing: 0.3 },
-  card: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+  container: { flex: 1, backgroundColor: colors.surface, paddingHorizontal: spacing.lg },
+  header: { alignItems: "center", marginBottom: spacing.xl },
+  brandName: { fontSize: 34, letterSpacing: 0.3 },
+  pick: { marginBottom: spacing.md },
+  list: { gap: spacing.md },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.cardSolid,
     borderRadius: radius.lg,
-    overflow: "hidden",
     borderWidth: 2,
-    borderColor: "transparent",
-    justifyContent: "flex-end",
+    borderColor: colors.border,
+    padding: spacing.sm,
   },
-  cardSelected: { borderColor: colors.brandPrimary },
-  cardContent: { padding: spacing.lg },
-  check: {
-    position: "absolute",
-    top: spacing.md,
-    right: spacing.md,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.brandPrimary,
+  rowSelected: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
+  thumb: { width: 64, height: 64, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
+  rowText: { flex: 1, marginLeft: spacing.md },
+  radio: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: colors.borderStrong,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: spacing.sm,
   },
-  footer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
-    backgroundColor: colors.surface,
-  },
+  radioOn: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  footer: { marginTop: "auto", paddingBottom: spacing.xl, paddingTop: spacing.md },
 });
