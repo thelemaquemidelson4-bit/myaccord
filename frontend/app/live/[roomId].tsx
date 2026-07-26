@@ -185,7 +185,7 @@ export default function LiveScreen() {
           Direct non disponible ici
         </AppText>
         <AppText variant="body" color="rgba(255,255,255,0.7)" center style={{ marginTop: spacing.sm, paddingHorizontal: spacing.xl }}>
-          La diffusion en direct fonctionne uniquement sur l'application mobile (build natif iOS/Android), pas sur l'aperçu web.
+          La diffusion en direct nécessite un build natif (iOS/Android). Elle ne fonctionne pas dans Expo Go ni sur l'aperçu web. Publiez l'app puis générez un build pour l'utiliser.
         </AppText>
         <Button title="Retour" variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing.xl }} testID="live-back-web" />
       </View>
@@ -197,7 +197,7 @@ export default function LiveScreen() {
   return (
     <View style={styles.container}>
       {isVideo && showStream ? (
-        <RTCView streamURL={showStream.toURL()} style={StyleSheet.absoluteFill} objectFit="cover" mirror={isHost} />
+        <RTCView stream={showStream} streamURL={showStream.toURL?.()} style={StyleSheet.absoluteFill} objectFit="cover" mirror={isHost} />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.center]}>
           <View style={styles.avatarBig}><Ionicons name="mic" size={64} color={colors.onSurfaceInverse} /></View>
@@ -257,6 +257,11 @@ export default function LiveScreen() {
           <Ionicons name={isHost ? "stop" : "close"} size={26} color="#FFFFFF" />
         </Pressable>
       </View>
+
+      {/* Hidden remote player so audio-only lives still play sound on web (viewer) */}
+      {!isVideo && !isHost && remoteStream && (
+        <RTCView stream={remoteStream} streamURL={remoteStream.toURL?.()} style={styles.hidden} />
+      )}
     </View>
   );
 }
@@ -274,4 +279,5 @@ const styles = StyleSheet.create({
   ctrl: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
   ctrlOff: { backgroundColor: "rgba(255,255,255,0.4)" },
   endBtn: { backgroundColor: colors.error },
+  hidden: { width: 1, height: 1, opacity: 0, position: "absolute" },
 });

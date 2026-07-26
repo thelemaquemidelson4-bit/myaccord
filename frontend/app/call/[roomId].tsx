@@ -173,7 +173,7 @@ export default function CallScreen() {
           Appels non disponibles ici
         </AppText>
         <AppText variant="body" color="rgba(255,255,255,0.7)" center style={{ marginTop: spacing.sm, paddingHorizontal: spacing.xl }}>
-          Les appels audio/vidéo fonctionnent uniquement sur l'application mobile (build natif iOS/Android), pas sur l'aperçu web.
+          Les appels audio/vidéo nécessitent un build natif (iOS/Android). Ils ne fonctionnent pas dans Expo Go ni sur l'aperçu web. Publiez l'app puis générez un build pour les utiliser.
         </AppText>
         <Button title="Retour" variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing.xl }} testID="call-back-web" />
       </View>
@@ -183,7 +183,7 @@ export default function CallScreen() {
   return (
     <View style={styles.container}>
       {isVideo && remoteStream ? (
-        <RTCView streamURL={remoteStream.toURL()} style={StyleSheet.absoluteFill} objectFit="cover" />
+        <RTCView stream={remoteStream} streamURL={remoteStream.toURL?.()} style={StyleSheet.absoluteFill} objectFit="cover" />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.audioBg, styles.center]}>
           <View style={styles.avatarBig}>
@@ -197,7 +197,7 @@ export default function CallScreen() {
 
       {isVideo && camOn && localStream && (
         <View style={[styles.pip, { top: insets.top + spacing.md }]}>
-          <RTCView streamURL={localStream.toURL()} style={styles.pipVideo} objectFit="cover" zOrder={1} mirror />
+          <RTCView stream={localStream} streamURL={localStream.toURL?.()} style={styles.pipVideo} objectFit="cover" zOrder={1} mirror />
         </View>
       )}
 
@@ -243,6 +243,11 @@ export default function CallScreen() {
           <Ionicons name="call" size={26} color="#FFFFFF" style={{ transform: [{ rotate: "135deg" }] }} />
         </Pressable>
       </View>
+
+      {/* Hidden remote player so audio-only calls still play sound on web */}
+      {!isVideo && remoteStream && (
+        <RTCView stream={remoteStream} streamURL={remoteStream.toURL?.()} style={styles.hidden} />
+      )}
     </View>
   );
 }
@@ -258,5 +263,6 @@ const styles = StyleSheet.create({
   controls: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: spacing.lg, paddingTop: spacing.lg },
   ctrl: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
   ctrlOff: { backgroundColor: "rgba(255,255,255,0.4)" },
+  hidden: { width: 1, height: 1, opacity: 0, position: "absolute" },
   hangup: { backgroundColor: colors.error },
 });

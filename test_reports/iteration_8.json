@@ -1,0 +1,31 @@
+{
+  "summary": "Full backend + frontend E2E verification of the NEW web WebRTC support for LIVE broadcast and 1:1 CALLS on Myaccord. Backend: 15/15 tests pass in /app/backend/tests/test_webrtc_lives_calls.py (POST /api/lives/start returns live with room_id==live_id + status='live' + viewers int; GET /api/lives lists active lives; POST /api/calls/start creates a message with a `call` payload {room_id, media, caller_id, status:'ringing'} and updates conversation last_message to '📞 Appel vidéo|audio'; auth + participant-only 404 gates enforced). Frontend (2 browser contexts, viewport 390x844, camera/mic granted; Playwright Chromium ships fake media so getUserMedia returns a green synthetic stream): (1) LIVE — coach@test.com logs in, opens Direct tab, taps fab-go-live, enters title 'TEST live iter8', taps live-start-confirm → navigates to /live/live_<id>?role=host&media=video, host screen shows local (mirrored) fake camera video, DIRECT badge and live-viewers pill visible. fan@test.com logs in in the 2nd context, opens Direct tab, sees the live-item-<id> in list, taps it → navigates to /live/<same_id>?role=viewer, connects (title 'TEST live iter8' shown, no crash, host viewer count increments to 1). (2) VIDEO CALL — leo@test.com opens Messages → conv with FC Talents → taps chat-call-video → navigates to /call/call_<id>?initiator=1&media=video, local PiP fake video rendered, status transitions to 'Connecté'. coach@test.com opens the same conversation, finds join-call-<message_id> button on the call invite, taps it → /call/<same_id>?initiator=0&media=video, both peers reach 'Connecté' with the remote fake video stream rendered (green MP4 test pattern with clock visible on both sides). (3) AUDIO CALL — chat-call-audio creates a call with media=audio, both peers reach 'Connecté', call-cam button hidden (=0 count as expected), avatar shown instead of video, call-mic + call-hangup present, no crash. No red-screen, no unhandled pageerror on either context during LIVE or CALL. Playwright fake media confirms the browser WebRTC path (rtc.web.ts) fully works: getUserMedia OK, RTCPeerConnection offer/answer + ICE candidates exchanged over the WS signaling channel (/api/ws/signal/{room_id}), and RTCView <video srcObject> displays the remote MediaStream.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_webrtc_lives_calls.py",
+    "/app/test_reports/pytest/webrtc_iter8_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "rtc.web.ts (49 lines): uses browser's native RTCPeerConnection + <video>.srcObject. `webrtcAvailable` correctly gates on RTCPeerConnection && navigator.mediaDevices. Local <video> is muted (mirror=true) to avoid echo — good practice.",
+    "rtc.native.ts (32 lines): Expo Go detection via Constants.appOwnership === 'expo' with try/catch require. Falls back to webrtcAvailable=false so screens render friendly 'requires native build' message. Correct guard.",
+    "call/[roomId].tsx: negotiation is clean — initiator waits for `peers`/`peer-joined`, non-initiator handles `offer` → `answer`, pending ICE candidates are queued until remoteDescription is set (pendingCandidates.current). Both sides set connectionState → 'connected'; verified in test that both reach 'Connecté'.",
+    "live/[roomId].tsx: host creates a dedicated PC per viewer (peersRef keyed by user_id), viewers create one PC. Viewer count updates on peer-joined/peer-left. `live-viewers` testID displays live viewer count. No mismatch.",
+    "chat/[id].tsx: startCall posts /calls/start then navigates /call/<room_id>?initiator=1&media=<audio|video>&name=... — join-call-<message_id> on the incoming call bubble goes to /call/<same>?initiator=0. Correct handshake.",
+    "backend /api/ws/signal/{room_id}: peer discovery ('peers' on join, 'peer-joined'/'peer-left' broadcasts, targeted offer/answer/candidate via `to` field) — matches frontend handlers exactly.",
+    "server.py POST /calls/start returns 404 for non-participant (verified) and inserts an invite message with a `call` field; GET /messages exposes `call` key (present as None or dict) — no MongoDB _id leak observed in JSON responses."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (15/15 webrtc lives/calls tests)", "frontend": "100% (LIVE host+viewer, VIDEO call video, AUDIO call — all reach connected without crash)"},
+  "seed_data_creation": "Ephemeral lives (TEST live iter8) created during the test and ended via live-end. Ephemeral calls (call_30d1e3edca73 video, call_89dde306d700 audio) created and hung up. Old TEST_ prefixed conversations reused from previous iterations. No manual seed required.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The web WebRTC path fully works because Playwright's bundled Chromium enables --use-fake-device-for-media-stream by default (green synthetic MP4). Note: getUserMedia auto-grants after page.context.grant_permissions(['camera','microphone'], origin=<BASE>). Conversation testIDs are 'conv-<conversation_id>' (NOT conv-item-*). Live items are 'live-item-<live_id>'. Join-call button is 'join-call-<message_id>'. Bottom-nav 'Direct' text has two occurrences — use locator('text=Direct').last. Chat call buttons: chat-call-audio, chat-call-video. Call screen controls: call-mic (always), call-cam (video only), call-switch (video only), call-hangup. Live host controls: live-mic, live-switch (video), live-end. Live viewer: live-end only.",
+  "rca_of_issue": "N/A — feature verification only. Original user report ('LIVE and CALL did not work') was addressed by rtc.web.ts (real browser WebRTC path) + rtc.native.ts guard (graceful degradation in Expo Go). Verified: on web preview both LIVE and CALL flows now succeed end-to-end, with local media rendered, signaling messages exchanged, and PeerConnection reaching 'connected'. On Expo Go the screens will now show a clear 'nécessite un build natif' message instead of crashing (visible in the code path when webrtcAvailable is false)."
+}
