@@ -19,6 +19,7 @@ export function ProfileForm({
 }) {
   const insets = useSafeAreaInsets();
   const isRecruiter = user.role === "recruiter";
+  const isFan = user.role === "fan";
 
   const [photo, setPhoto] = useState<string | null>(user.photo || null);
   const [name, setName] = useState(user.name || "");
@@ -43,7 +44,7 @@ export function ProfileForm({
       if (isRecruiter) {
         payload.club_name = clubName;
         payload.sport = sport;
-      } else {
+      } else if (!isFan) {
         payload.sport = sport;
         payload.position = position;
         payload.level = level;
@@ -72,15 +73,17 @@ export function ProfileForm({
       >
         <PhotoPicker uri={photo} onPick={setPhoto} label={isRecruiter ? "Logo / photo" : "Photo de profil"} />
 
-        <Input label={isRecruiter ? "Nom du club / recruteur" : "Nom complet"} value={name} onChangeText={setName} testID="pf-name" />
+        <Input label={isRecruiter ? "Nom du club / recruteur" : isFan ? "Nom / pseudo" : "Nom complet"} value={name} onChangeText={setName} testID="pf-name" />
 
         {isRecruiter && (
           <Input label="Nom officiel du club" placeholder="Ex: FC Talents" value={clubName} onChangeText={setClubName} testID="pf-club" />
         )}
 
-        <SelectField label="Sport" value={sport} options={SPORTS} onChange={(v) => { setSport(v); setPosition(null); }} testID="pf-sport" />
+        {!isFan && (
+          <SelectField label="Sport" value={sport} options={SPORTS} onChange={(v) => { setSport(v); setPosition(null); }} testID="pf-sport" />
+        )}
 
-        {!isRecruiter && (
+        {!isRecruiter && !isFan && (
           <>
             <SelectField label="Poste" value={position} options={positionOptions.length ? positionOptions : ["Autre"]} onChange={setPosition} testID="pf-position" />
             <SelectField label="Niveau" value={level} options={LEVELS} onChange={setLevel} testID="pf-level" />

@@ -23,6 +23,7 @@ export default function Auth() {
   const [error, setError] = useState<string | null>(null);
 
   const isRecruiter = role === "recruiter";
+  const isFan = role === "fan";
 
   const submit = async () => {
     setError(null);
@@ -78,13 +79,13 @@ export default function Auth() {
           {mode === "register" ? "Créer un compte" : "Bon retour"}
         </AppText>
         <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xs, marginBottom: spacing.xl }}>
-          {isRecruiter ? "Espace recruteur / club" : "Espace athlète"}
+          {isRecruiter ? "Espace recruteur / club" : isFan ? "Espace supporter" : "Espace athlète"}
         </AppText>
 
         {mode === "register" && (
           <Input
-            label={isRecruiter ? "Nom du club / recruteur" : "Nom complet"}
-            placeholder={isRecruiter ? "Ex: FC Talents" : "Ex: Léo Martin"}
+            label={isRecruiter ? "Nom du club / recruteur" : isFan ? "Nom / pseudo" : "Nom complet"}
+            placeholder={isRecruiter ? "Ex: FC Talents" : isFan ? "Ex: Alex" : "Ex: Léo Martin"}
             icon="person-outline"
             value={name}
             onChangeText={setName}

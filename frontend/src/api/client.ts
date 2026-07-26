@@ -55,7 +55,7 @@ export type User = {
   user_id: string;
   email: string;
   name: string;
-  role: "player" | "recruiter" | null;
+  role: "player" | "recruiter" | "fan" | null;
   photo?: string | null;
   bio?: string | null;
   location?: string | null;

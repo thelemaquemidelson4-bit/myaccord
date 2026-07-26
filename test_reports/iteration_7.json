@@ -1,0 +1,35 @@
+{
+  "summary": "Full backend + frontend E2E validation of the NEW 'fan' (Supporter) role on Myaccord. Backend: 21/21 new fan-role tests pass in /app/backend/tests/test_fan_role.py (register/login as fan, whitelist enforcement, PUT /api/profile allowed, GET athletes/offers/lives allowed, POST /api/offers 403, POST /api/applications 403, /api/ai/match-suggestions 403, fan can start conversation + send/receive messages with an athlete). Frontend (mobile viewport 390x844): 24/24 UI checks pass — onboarding shows 3 role cards (role-player, role-recruiter, role-fan), selecting Supporter + Continuer routes to /auth with 'Espace supporter' subtitle, fan register/login lands on home showing 'DÉCOUVRIR' title with fan-seg-athletes / fan-seg-offers toggle (both testIDs present and switchable), NO fab-create-offer and NO ai-suggest-btn for fan, Search tab placeholder = \"Nom de l'athlète\", Profile tab shows edit-profile-btn + bio 'À propos' with NO Caractéristiques / Résumé IA / Mes offres / Mes candidatures sections, and fan-viewed offer detail (offer_1bd9c80d9691) renders title+description with NO apply-btn and NO 'Postuler' text anywhere. Regression: player (leo@test.com) home shows OFFRES + no fan segmented toggle; recruiter (coach@test.com) home shows TALENTS + IA button + FAB. No red-screen, no critical console errors (only one benign 401 pre-auth). Existing 84-test suite untouched.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_fan_role.py",
+    "/app/test_reports/pytest/fan_role_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py: role whitelist ('player','recruiter','fan') correctly applied in POST /auth/register, POST /auth/google/session, and PUT /profile — fan cannot bypass to any other role.",
+    "server.py POST /offers: role gate `!= 'recruiter'` returns 403 with FR message 'Réservé aux recruteurs' — correctly excludes fan and player.",
+    "server.py POST /applications: role gate `!= 'player'` returns 403 'Réservé aux athlètes' — correctly excludes fan and recruiter.",
+    "server.py POST /ai/match-suggestions: role gate `!= 'recruiter'` correctly returns 403 for fan.",
+    "frontend/app/(tabs)/index.tsx: `isFan` correctly drives the DÉCOUVRIR title + fan-seg-athletes/fan-seg-offers toggle, hides ai-suggest-btn (only rendered for isRecruiter) and hides fab-create-offer.",
+    "frontend/app/(tabs)/search.tsx: `showsAthletes = isRecruiter || role==='fan'` gives fan the athletes-search placeholder + results — matches spec.",
+    "frontend/app/(tabs)/profile.tsx: player-only Caractéristiques + Résumé IA sections are gated by `isPlayer`; recruiter-only 'Mes offres' by `isRecruiter`; fan gets only Modifier le profil + À propos (bio). Verified in DOM.",
+    "frontend/app/offer/[id].tsx: apply footer is rendered only when `user?.role === 'player'` — fan correctly sees no Postuler button and no `apply-btn` testID. Confirmed with a fresh offer.",
+    "frontend/app/auth.tsx: `isFan` correctly renders 'Espace supporter' subtitle and 'Nom / pseudo' label, and passes role='fan' to register() → backend accepts and returns role='fan'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_fan_role.py (new)"
+  ],
+  "success_rate": {"backend": "100% (21/21 fan-role tests + previous suite unaffected)", "frontend": "100% (24/24 UI checks incl. fan E2E, regression player, regression recruiter)"},
+  "seed_data_creation": "Reused seed accounts (fan@test.com, leo@test.com, coach@test.com). Test-only offers/applications/messages were created and either cascade-deleted or prefixed 'TEST_' for cleanup. One transient offer (offer_1bd9c80d9691) was deleted at end of frontend run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Fan role fully validated E2E. Frontend tokens are stored in localStorage under key 'scoutmoi_session_token' (used by src/api/client). Athletes list may be empty on fresh DB if leo profile update hasn't been called; run test_fan_role.py first to seed. Offer detail apply-btn testID is 'apply-btn' — its absence for fan is the canonical assertion.",
+  "rca_of_issue": "N/A — feature verification only; no bugs found."
+}

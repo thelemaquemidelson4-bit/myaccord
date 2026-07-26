@@ -16,6 +16,7 @@ export default function Search() {
   const router = useRouter();
   const { user } = useAuth();
   const isRecruiter = user?.role === "recruiter";
+  const showsAthletes = isRecruiter || user?.role === "fan";
 
   const [q, setQ] = useState("");
   const [sport, setSport] = useState<string | null>(null);
@@ -33,7 +34,7 @@ export default function Search() {
       if (level) params.append("level", level);
       if (location) params.append("location", location);
       const qs = params.toString() ? `?${params.toString()}` : "";
-      if (isRecruiter) {
+      if (showsAthletes) {
         const data = await api.get(`/athletes${qs}`);
         setResults(data.athletes);
       } else {
@@ -45,7 +46,7 @@ export default function Search() {
     } finally {
       setLoading(false);
     }
-  }, [q, sport, level, location, isRecruiter]);
+  }, [q, sport, level, location, showsAthletes]);
 
   return (
     <View style={styles.container}>
@@ -57,7 +58,7 @@ export default function Search() {
           <View style={styles.searchBar}>
             <Ionicons name="search" size={18} color={colors.onSurfaceTertiary} />
             <TextInput
-              placeholder={isRecruiter ? "Nom de l'athlète" : "Titre de l'offre"}
+              placeholder={showsAthletes ? "Nom de l'athlète" : "Titre de l'offre"}
               placeholderTextColor={colors.info}
               value={q}
               onChangeText={setQ}
@@ -114,7 +115,7 @@ export default function Search() {
             </Pressable>
           }
           renderItem={({ item }) =>
-            isRecruiter ? (
+            showsAthletes ? (
               <AthleteCard athlete={item} onPress={() => router.push(`/athlete/${item.user_id}`)} />
             ) : (
               <OfferCard offer={item} onPress={() => router.push(`/offer/${item.offer_id}`)} />

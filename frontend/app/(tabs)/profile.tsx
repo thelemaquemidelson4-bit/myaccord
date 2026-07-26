@@ -16,6 +16,7 @@ export default function Profile() {
   const router = useRouter();
   const { user, logout, setUser } = useAuth();
   const isRecruiter = user?.role === "recruiter";
+  const isPlayer = user?.role === "player";
 
   const [aiLoading, setAiLoading] = useState(false);
   const [offers, setOffers] = useState<any[]>([]);
@@ -28,7 +29,7 @@ export default function Profile() {
       if (me.user.role === "recruiter") {
         const o = await api.get("/offers/mine");
         setOffers(o.offers);
-      } else {
+      } else if (me.user.role === "player") {
         const a = await api.get("/applications/mine");
         setApps(a.applications);
       }
@@ -84,7 +85,7 @@ export default function Profile() {
         <View style={styles.body}>
           <Button title="Modifier le profil" icon="create-outline" variant="secondary" full onPress={() => router.push("/edit-profile")} testID="edit-profile-btn" />
 
-          {!isRecruiter && (
+          {isPlayer && (
             <>
               <SectionTitle title="Caractéristiques" />
               <View style={styles.statsGrid}>
@@ -95,7 +96,7 @@ export default function Profile() {
             </>
           )}
 
-          {!isRecruiter && (
+          {isPlayer && (
             <View style={styles.aiCard}>
               <View style={styles.aiHeader}>
                 <Ionicons name="sparkles" size={16} color={colors.warning} />
@@ -145,7 +146,7 @@ export default function Profile() {
                 ))
               )}
             </>
-          ) : (
+          ) : isPlayer ? (
             <>
               <SectionTitle title={`Mes candidatures (${apps.length})`} />
               {apps.length === 0 ? (
@@ -169,7 +170,7 @@ export default function Profile() {
                 })
               )}
             </>
-          )}
+          ) : null}
         </View>
       </ScrollView>
     </View>

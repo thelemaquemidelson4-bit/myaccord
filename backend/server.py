@@ -215,7 +215,7 @@ async def register(inp: RegisterInput):
     existing = await db.users.find_one({"email": inp.email.lower()})
     if existing:
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
-    if inp.role not in ("player", "recruiter"):
+    if inp.role not in ("player", "recruiter", "fan"):
         raise HTTPException(status_code=400, detail="Rôle invalide")
     user_id = new_id("user")
     doc = {
@@ -276,7 +276,7 @@ async def google_session(inp: GoogleSessionInput):
             "email": email,
             "password": None,
             "name": data.get("name") or email.split("@")[0],
-            "role": inp.role if inp.role in ("player", "recruiter") else None,
+            "role": inp.role if inp.role in ("player", "recruiter", "fan") else None,
             "photo": data.get("picture"),
             "bio": None, "location": None, "sport": None, "position": None,
             "level": None, "age": None, "gender": None, "height": None,
@@ -310,7 +310,7 @@ async def logout(authorization: Optional[str] = Header(None)):
 @api_router.put("/profile")
 async def update_profile(inp: ProfileUpdate, user: Dict[str, Any] = Depends(get_current_user)):
     updates = {k: v for k, v in inp.dict().items() if v is not None}
-    if "role" in updates and updates["role"] not in ("player", "recruiter"):
+    if "role" in updates and updates["role"] not in ("player", "recruiter", "fan"):
         updates.pop("role")
     if updates:
         await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})

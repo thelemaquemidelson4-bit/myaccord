@@ -19,7 +19,9 @@ export default function CompleteProfile() {
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <AppText variant="display" style={{ fontSize: 30 }}>Complétez votre profil</AppText>
         <AppText variant="body" color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xs }}>
-          Ces infos aident les {user.role === "recruiter" ? "athlètes" : "recruteurs"} à vous trouver.
+          {user.role === "fan"
+            ? "Ajoutez une photo et une courte présentation."
+            : `Ces infos aident les ${user.role === "recruiter" ? "athlètes" : "recruteurs"} à vous trouver.`}
         </AppText>
       </View>
       <ProfileForm

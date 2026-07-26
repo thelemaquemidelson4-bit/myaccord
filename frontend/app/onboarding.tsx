@@ -12,13 +12,14 @@ const { height } = Dimensions.get("window");
 
 const ATHLETE_BG = "https://images.pexels.com/photos/35005203/pexels-photo-35005203.jpeg";
 const RECRUITER_BG = "https://images.pexels.com/photos/32101180/pexels-photo-32101180.jpeg";
+const FAN_BG = "https://images.pexels.com/photos/2277981/pexels-photo-2277981.jpeg";
 
 export default function Onboarding() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [role, setRole] = useState<"player" | "recruiter" | null>(null);
+  const [role, setRole] = useState<"player" | "recruiter" | "fan" | null>(null);
 
-  const cardHeight = (height - insets.top - insets.bottom - 180) / 2;
+  const cardHeight = Math.max(170, (height - insets.top - insets.bottom - 220) / 3);
 
   return (
     <View style={styles.container}>
@@ -51,6 +52,15 @@ export default function Onboarding() {
           image={RECRUITER_BG}
           selected={role === "recruiter"}
           onPress={() => setRole("recruiter")}
+          height={cardHeight}
+        />
+        <RoleCard
+          testID="role-fan"
+          title="Je suis Supporter"
+          subtitle="Suivez les talents, regardez les directs et échangez."
+          image={FAN_BG}
+          selected={role === "fan"}
+          onPress={() => setRole("fan")}
           height={cardHeight}
         />
       </ScrollView>

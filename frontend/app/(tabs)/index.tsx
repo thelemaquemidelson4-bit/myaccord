@@ -16,6 +16,7 @@ export default function Home() {
   const router = useRouter();
   const { user } = useAuth();
   const isRecruiter = user?.role === "recruiter";
+  const isFan = user?.role === "fan";
 
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,11 +24,14 @@ export default function Home() {
   const [sport, setSport] = useState<string | null>(null);
   const [aiMode, setAiMode] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [feedType, setFeedType] = useState<"athletes" | "offers">("athletes");
+
+  const showingAthletes = isRecruiter || (isFan && feedType === "athletes");
 
   const load = useCallback(async () => {
     try {
       const q = sport ? `?sport=${encodeURIComponent(sport)}` : "";
-      if (isRecruiter) {
+      if (showingAthletes) {
         const data = await api.get(`/athletes${q}`);
         setItems(data.athletes);
       } else {
@@ -40,7 +44,7 @@ export default function Home() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [sport, isRecruiter]);
+  }, [sport, showingAthletes]);
 
   useFocusEffect(useCallback(() => { setAiMode(false); load(); }, [load]));
 
@@ -79,13 +83,23 @@ export default function Home() {
         <View style={styles.headerTop}>
           <View style={{ flex: 1 }}>
             <AppText variant="caption" color={colors.onSurfaceTertiary} numberOfLines={1}>
-              {isRecruiter ? "Découvrez des talents" : "Offres pour vous"}
+              {isRecruiter ? "Découvrez des talents" : isFan ? "Explorez la communauté" : "Offres pour vous"}
             </AppText>
             <AppText variant="display" style={{ fontSize: 28 }}>
-              {isRecruiter ? "TALENTS" : "OFFRES"}
+              {isRecruiter ? "TALENTS" : isFan ? "DÉCOUVRIR" : "OFFRES"}
             </AppText>
           </View>
         </View>
+        {isFan && (
+          <View style={styles.segRow}>
+            <Pressable testID="fan-seg-athletes" onPress={() => setFeedType("athletes")} style={[styles.seg, feedType === "athletes" && styles.segActive]}>
+              <AppText variant="body" weight="semibold" color={feedType === "athletes" ? colors.onBrandPrimary : colors.onSurfaceSecondary}>Athlètes</AppText>
+            </Pressable>
+            <Pressable testID="fan-seg-offers" onPress={() => setFeedType("offers")} style={[styles.seg, feedType === "offers" && styles.segActive]}>
+              <AppText variant="body" weight="semibold" color={feedType === "offers" ? colors.onBrandPrimary : colors.onSurfaceSecondary}>Offres</AppText>
+            </Pressable>
+          </View>
+        )}
         <ChipRow items={SPORTS} selected={sport} onSelect={(v) => { setSport(v); }} testIDPrefix="home-sport" />
       </View>
 
@@ -102,7 +116,7 @@ export default function Home() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brandPrimary} />}
           renderItem={({ item }) =>
-            isRecruiter ? (
+            showingAthletes ? (
               <AthleteCard athlete={item} onPress={() => router.push(`/athlete/${item.user_id}`)} />
             ) : (
               <OfferCard offer={item} onPress={() => router.push(`/offer/${item.offer_id}`)} />
@@ -110,8 +124,8 @@ export default function Home() {
           }
           ListEmptyComponent={
             <EmptyState
-              icon={isRecruiter ? "people-outline" : "clipboard-outline"}
-              title={isRecruiter ? "Aucun athlète trouvé" : "Aucune offre trouvée"}
+              icon={showingAthletes ? "people-outline" : "clipboard-outline"}
+              title={showingAthletes ? "Aucun athlète trouvé" : "Aucune offre trouvée"}
               subtitle="Modifiez les filtres ou revenez plus tard."
               cta={sport ? "Réinitialiser" : undefined}
               onCta={() => setSport(null)}
@@ -151,6 +165,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   brandName: { fontSize: 30, letterSpacing: 0.3 },
+  segRow: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+  seg: { flex: 1, height: 40, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
+  segActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
   aiBtn: {
     flexDirection: "row",
     alignItems: "center",
